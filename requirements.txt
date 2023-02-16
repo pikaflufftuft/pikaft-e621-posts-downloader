@@ -1,0 +1,7 @@
+beautifulsoup4
+dask
+numpy
+opencv_python
+pandas
+requests
+tqdm
