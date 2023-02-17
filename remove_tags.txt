@@ -189,8 +189,10 @@ alolan_form
 alternate_costume
 alternate_version_at_source
 ambiguous_species
+anonymous_artist
 archived_source
 avian_humanoid
+avoid_posting
 baby_kangaskhan
 bandai_namco
 bat_humanoid
@@ -309,6 +311,7 @@ translation_edit
 translation_request
 ultra_beast
 unavailable_at_source
+unknown_artist
 unknown_character
 unprofessional_behavior
 upscale
