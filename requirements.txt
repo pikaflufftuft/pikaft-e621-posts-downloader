@@ -1,7 +1,6 @@
 beautifulsoup4
-dask
-numpy
 opencv_python
 pandas
+polars
 requests
 tqdm
