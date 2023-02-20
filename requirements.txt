@@ -4,3 +4,4 @@ pandas
 polars
 requests
 tqdm
+pyarrow
