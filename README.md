@@ -22,6 +22,7 @@ clone repository
 git clone https://github.com/pikaflufftuft/pikaft-e621-posts-downloader.git
 ```
 ```
+cd pikaft-e621-posts-downloader
 pip install -r requirements.txt
 ```
 
