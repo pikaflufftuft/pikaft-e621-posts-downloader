@@ -1,6 +1,5 @@
 beautifulsoup4
 opencv_python
-pandas
 polars
 requests
 tqdm
