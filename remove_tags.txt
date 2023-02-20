@@ -255,6 +255,7 @@ high_res
 hisuian_form
 huge_filesize
 human_edit
+humor
 incest_(lore)
 insect_humanoid
 legendary_pokemon
