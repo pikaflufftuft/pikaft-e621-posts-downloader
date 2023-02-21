@@ -258,6 +258,7 @@ human_edit
 humor
 incest_(lore)
 insect_humanoid
+joke
 legendary_pokemon
 lol_comments
 low_res
