@@ -4,7 +4,7 @@
  
  [![](https://img.shields.io/static/v1?message=Open%20in%20Colab&logo=googlecolab&labelColor=5c5c5c&color=0f80c1&label=%20&style=for-the-badge)](coming_soon) (coming soon!)
 
-##### >> (If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber )
+##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber
 
 ## Features
 
@@ -72,15 +72,18 @@ I recommend passing `--phaseperbatch` for small storage spaces as thousands of p
 
 I recommend **not** passing it if you have adequate storage space and memory.
 
+Posts/Tags parquets will be checked first then, when not found, will be created using posts/tags CSVs. <br />
+Posts/Tags CSVs when not found, will be created using posts/tags CSV.gz's. <br />
+Posts/Tags CSV.gz's when not found, will be downloaded.
 ### Setting parameters
 
 | Parameter | type | Options | Description | Relative Parent folder |
 |:--- |:---:|:---:|:--- |:---:|
 | batch_folder | str | *any directory path* | Output directory for each batch | basefolder |
 | required_tags | str | *any e621 tag* | Separate tags with `,`<br />combine multiple tag groups with <code>&#124;</code><br />example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />search for posts that starts/ends with a certain word by adding `*` after/before the word<br />example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
-| blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tags found in `required_tags` are ignored. |  |
+| blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tag groups found as a subset in any tag group in `required_tags` are ignored. Example: `female` and `female, anthro` are subsets of `female, anthro` but `female, anthro, male` and `female, male` are not. |  |
 | include_png<br />include_jpg<br />include_gif<br />include_webm<br />include_swf | bool | `true`, `false` | Setting to `false` will not include posts with that file type. At least one should be `true`. |  |
-| include_swf<br />include_explicit<br />include_questionable | bool | `true`, `false` | Setting to `false` will not include posts with that post rating. At least one should be `true`. |  |
+| include_explicit<br />include_questionable<br />include_safe | bool | `true`, `false` | Setting to `false` will not include posts with that post rating. At least one should be `true`. |  |
 | min_score | int |  | Collect posts with a minimum specified score |  |
 | min_fav_count | int |  | Collect posts with a minimum specified favorite count |  |
 | min_date | str |  | Collect posts starting from specified date. Use date format `YYYY-mm-dd` or `YYYY-mm` or `YYYY`. Use zero padding. |  |
@@ -97,7 +100,7 @@ I recommend **not** passing it if you have adequate storage space and memory.
 | include_tag_file | bool | `true`, `false` | Download posts along with their tags saved in .txt files. Tag files use `save_filename_type` as the filename but with a .txt extension |  |
 | skip_post_download | bool | `true`, `false` | Set to `true` to not download collected posts. Good for when you only need to save tag files. |  |
 | tag_sep | str |  | Separator used for separating tags in the tag file. `", "` is recommended.  |  |
-| include_swf_tag<br />include_explicit_tag<br />include_questionable_tag | bool | `true`, `false` | Prepend post rating to tag list using the following tags representing `s`, `e`, `q`, respectively: `safe`, `explicit`, `questionable` |  |
+| include_explicit_tag<br />include_questionable_tag<br />include_safe_tag | bool | `true`, `false` | Prepend post rating to tag list using the following tags representing `e`, `q`, `s`, respectively: `explicit`, `questionable`,`safe` |  |
 | reorder_tags | bool | `true`, `false` | If `true`, rearrange tags into their respective categories specified in `tag_order_format` |  |
 | tag_order_format | str | [e621 tag categories](https://github.com/pikaflufftuft/pikaft-e621-posts-downloader#e621-tag-categories) | Tag categories not listed will be removed from the tag file. If `reorder_tags` is `true`, this defines the tag category arrangment in the tag file. e.g., `"tag_order_format": "character, species",` species tags are placed after character tags. Specify at least one tag category. |  |
 | prepend_tags<br />append_tags | str |  | Inserted at the start/end of the tag file. Use specified tag separator `tag_sep`. Unaffected by reordering of tags. Does not prepend/append if the custom tag is already present. Set to empty string to disable. |  |
