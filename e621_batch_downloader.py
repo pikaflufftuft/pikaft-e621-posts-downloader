@@ -652,7 +652,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                         else:
                             all_tag_count[tag] = length
     
-    if batch_mode:
+    if batch_mode and not prms["skip_post_download"][batch_num]:
         __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
         print('## Downloading posts')
         has_error = False
@@ -671,7 +671,10 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             print('## Finished downloading, however some were not downloaded (most likely posts that have generally prms["blacklist"][batch_num]ed tags)')
         os.remove(base_folder + '/__.txt')
     
-    return img_lists
+    if not prms["skip_post_download"][batch_num]:
+        return img_lists
+    else:
+        return []
 
 def create_tag_count(prms):
     for path in set(prms["tag_count_list_folder"]):
@@ -690,17 +693,15 @@ def create_tag_count(prms):
             print(f'## Tag count CSVs {path} done!')
 
 def init_counter():
-    global counter, counter_lock
-    counter = multiprocessing.Value(c_int)
-    counter_lock = multiprocessing.Lock()
+    global counter
+    counter = multiprocessing.Manager().Value(c_int,0)
 
-def increment(length):
-    global counter, counter_lock
+def increment(counter, counter_lock, length):
     with counter_lock:
         counter.value += 1
         print(f'\r## Resizing Images: {counter.value}/{length} ',end='')
 
-def parallel_resize(imgs_folder, img_file, img_ext, min_short_side, num_images, failed_images, delete_original, resized_img_folder):
+def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, min_short_side, num_images, failed_images, delete_original, resized_img_folder):
     resized_img_folder = imgs_folder if (delete_original or resized_img_folder == '') else resized_img_folder
     if (img_ext == 'same_as_original') or (os.path.splitext(img_file)[1] == img_ext):
         resized_filename = resized_img_folder + img_file
@@ -708,8 +709,7 @@ def parallel_resize(imgs_folder, img_file, img_ext, min_short_side, num_images, 
         resized_filename = resized_img_folder + os.path.splitext(img_file)[0] + img_ext
 
     if resized_img_folder != imgs_folder and os.path.isfile(resized_filename):
-        print(f"## {resized_filename} already exists.")
-        increment(num_images)
+        increment(counter, counter_lock, num_images)
         return
 
     try:
@@ -717,7 +717,7 @@ def parallel_resize(imgs_folder, img_file, img_ext, min_short_side, num_images, 
         height, width = image.shape[:2]
     except Exception:
         failed_images.append(imgs_folder + img_file)
-        increment(num_images)
+        increment(counter, counter_lock, num_images)
         return
 
     img_short_side = min(width, height)
@@ -744,11 +744,11 @@ def parallel_resize(imgs_folder, img_file, img_ext, min_short_side, num_images, 
         else: # same folder -> rename original image
             os.rename(imgs_folder + img_file, imgs_folder + '_' + img_file)
             cv2.imwrite(resized_filename, image)
-    increment(num_images)
+    increment(counter, counter_lock, num_images)
 
 
 def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):    
-    global failed_images
+    global failed_images, counter, counter_lock
     min_short_side = prms["min_short_side"][batch_num]
     img_ext = prms["img_ext"][batch_num]
     delete_original = prms["delete_original"][batch_num]
@@ -761,7 +761,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
         print(f'## Resizing Images for batch {batch_num} ...')
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(img_folders, img_files, repeat(img_ext), repeat(min_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(min_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
     
     if method == 'relocate':
@@ -776,7 +776,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
 
 def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_short_side, img_ext, delete_original, resized_img_folder_batches, delete_original_batches, img_folder_batches, tag_file_batches, method_tag_files):
-    global failed_images
+    global failed_images, counter, counter_lock
     
     init_counter()
     
@@ -784,7 +784,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
         print('## Resizing Images ...')
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(img_folders, img_files, img_ext, min_short_side, repeat(len(img_files)), repeat(failed_images), delete_original, resized_img_folders))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, min_short_side, repeat(len(img_files)), repeat(failed_images), delete_original, resized_img_folders))
     print('')
 
     for i, res_img_fol_batch, del_org_batch, img_fol_batch, tag_file_batch, method in zip(range(len(resized_img_folder_batches)), resized_img_folder_batches, delete_original_batches, img_folder_batches, tag_file_batches, method_tag_files):
@@ -800,7 +800,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
                     shutil.copyfile(img_folder + tag_file, res_img_fol_batch + tag_file)
 
 def main():
-    global failed_images
+    global failed_images, counter, counter_lock
     print('##################### e621 posts downloader #####################')
     parser = argparse.ArgumentParser(description='e621 posts downloader')
     parser.add_argument('-f', '--basefolder', action='store', type=str, help='default output directory used for storing e621 db files and downloading posts', default='')
@@ -863,6 +863,8 @@ def main():
     
     manager = multiprocessing.Manager()
     failed_images = manager.list()
+    counter = manager.Value(c_int,0)
+    counter_lock = manager.Lock()
     
     if args.phaseperbatch:
         for batch_num in range(batch_count):
