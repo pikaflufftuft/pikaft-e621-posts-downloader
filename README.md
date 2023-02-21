@@ -31,7 +31,7 @@ This downloader uses aria2 for fast downloading.
 ```
 sudo apt-get install aria2
 ```
-For Windows, install the aria2 build https://github.com/aria2/aria2/releases/ Add aria2 in your evironment variables
+For Windows, install the aria2 build https://github.com/aria2/aria2/releases/ Add aria2 in your evironment variable paths
 
 ## How to use
 
