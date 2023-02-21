@@ -81,7 +81,7 @@ Posts/Tags CSV.gz's when not found, will be downloaded.
 |:--- |:---:|:---:|:--- |:---:|
 | batch_folder | str | *any directory path* | Output directory for each batch | basefolder |
 | required_tags | str | *any e621 tag* | Separate tags with `,`<br />combine multiple tag groups with <code>&#124;</code><br />example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />search for posts that starts/ends with a certain word by adding `*` after/before the word<br />example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
-| blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tag groups found as a subset in any tag group in `required_tags` are ignored. Example: `female` and `female, anthro` are subsets of `female, anthro` but `female, anthro, male` and `female, male` are not. |  |
+| blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tag groups found as a subset in any tag group in `required_tags` are ignored. Example: `female` and `anthro, female` are subsets of `female, anthro` but `female, anthro, male` and `female, male` are not. |  |
 | include_png<br />include_jpg<br />include_gif<br />include_webm<br />include_swf | bool | `true`, `false` | Setting to `false` will not include posts with that file type. At least one should be `true`. |  |
 | include_explicit<br />include_questionable<br />include_safe | bool | `true`, `false` | Setting to `false` will not include posts with that post rating. At least one should be `true`. |  |
 | min_score | int |  | Collect posts with a minimum specified score |  |
