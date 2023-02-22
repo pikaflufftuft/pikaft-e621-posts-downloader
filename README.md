@@ -154,6 +154,10 @@ Files/folders that use the same path are merged, not overwritten. For example, u
 * lore (`trans_(lore)`, `male_(lore)`, ...)
 * rating (`explicit`, `questionable`, `safe`) (rating tags are techincally not e621 tags)
 
+### Notes
+* When downloading, if the file already exists, it is skipped, unless, the file exists but was modified, it will download and the modified file will be renamed. Hence, I recommend not setting `delete_original` to `true` if you plan redownloading using the same destination folder.
+* When resizing, when `resized_img_folder` uses a different folder from the source folder, if the file in the destination folder already exists, it is skipped. It does not check if the already existing file has the specified `min_short_side`.
+
 ## License
 
 MIT
