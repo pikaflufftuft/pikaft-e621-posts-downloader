@@ -625,9 +625,9 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 else:
                     updated_tags = unsegregated
                 if prepend_tags:
-                    updated_tags = [tag for tag in prepend_tags if not (tag in updated_tags)] + updated_tags
+                    updated_tags = [tag for tag in prepend_tags if tag not in updated_tags] + updated_tags
                 if append_tags:
-                    updated_tags = updated_tags + [tag for tag in append_tags if not (tag in updated_tags)]
+                    updated_tags = updated_tags + [tag for tag in append_tags if tag not in updated_tags]
                 updated_tags = tag_sep.join(updated_tags)
                 if replace_underscores:
                     updated_tags = updated_tags.replace('_',' ')
@@ -668,7 +668,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 f.write(stdout.decode('utf-8'))
             print('## Posts downloaded')
         else:
-            print('## Finished downloading, however some were not downloaded (most likely posts that have generally prms["blacklist"][batch_num]ed tags)')
+            print('## Finished downloading, however some were not downloaded (most likely posts that have generally blacklisted tags)')
         os.remove(base_folder + '/__.txt')
     
     if not prms["skip_post_download"][batch_num]:
