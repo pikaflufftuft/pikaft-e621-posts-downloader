@@ -424,7 +424,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
         df = df.filter(pl.col("image_width") * pl.col("image_height") >= prms["min_area"][batch_num])
         df = df.drop(columns=['image_width','image_height'])
     
-    print("## Getting posts that has all required tags")
+    print("## Getting posts that have all required tags")
     all_required_tags = []
     tag_groups = set([s.strip().lower() for s in prms["required_tags"][batch_num].split('|')])
     if '' in tag_groups:
@@ -450,7 +450,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     if expr is not None:
         df = df.filter(expr)
     
-    print('## Removing posts that has blacklisted tags')
+    print('## Removing posts that have blacklisted tags')
     tag_groups = set([s.strip().lower() for s in prms["blacklist"][batch_num].split('|')])
     if '' in tag_groups:
         tag_groups.remove('')
@@ -473,11 +473,12 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
 
     
     if prms["top_n"][batch_num] > 1:
-        print(f'## Getting top {prms["top_n"][batch_num]} posts')
         if prms["do_sort"][batch_num]:
+            print(f'## Getting {prms["top_n"][batch_num]} highest scoring posts')
             top_n = prms["top_n"][batch_num]
             df = df.filter(pl.col('score') >= pl.col('score').top_k(top_n).last()).sort('score', reverse=True).head(top_n)
         else:
+            print(f'## Getting {prms["top_n"][batch_num]} earliest posts')
             df = df.head(n=prms["top_n"][batch_num])
 
     posts_save_path = f'{prms["batch_folder"][batch_num]}/filtered_posts_{batch_num}.parquet'
