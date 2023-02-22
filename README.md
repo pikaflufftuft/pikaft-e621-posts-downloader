@@ -63,7 +63,7 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 | `-ppar` | `--postsparquet` | path to e621 posts parquet |  |
 | `-tpar` | `--tagsparquet` | path to e621 tags parquet |  |
 
-Example:
+Examples:
 
 ```
 python3 e621_batch_downloader.py -f myfolder -s settings.json
