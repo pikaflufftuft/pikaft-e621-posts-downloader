@@ -66,6 +66,9 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 Example:
 
 ```
+python3 e621_batch_downloader.py -f myfolder -s settings.json
+```
+```
 python3 e621_batch_downloader.py -s settings.json --phaseperbatch
 ```
 I recommend passing `--phaseperbatch` for small storage spaces as thousands of posts can take up a lot of space. This completes batches one by one, resizing images in the current batch before downloading the next batch.
