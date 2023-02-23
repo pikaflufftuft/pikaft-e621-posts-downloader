@@ -15,6 +15,7 @@ import multiprocessing
 from itertools import repeat
 from ctypes import c_int
 import re
+import time
 
 def check_param_batch_count(prms):
     batch_count = None
@@ -62,7 +63,7 @@ def prep_params(prms, batch_count, base_folder):
             prms["batch_folder"][i] = removeslash(f'{base_folder}/{folder.strip("/")}')  
         os.makedirs(prms["batch_folder"][i], exist_ok=True)
 
-    check_valid_param(prms["required_tags"], 'required_tags', None, str)
+    check_valid_param(prms["required_tags"], 'required_tags', None, str)       
     check_valid_param(prms["blacklist"], 'blacklist', None, str)
 
     check_valid_param(prms["include_png"], 'include_png', (True, False))
@@ -273,6 +274,55 @@ def prep_params(prms, batch_count, base_folder):
         if do_sort and (min_score < 300) and (min_date < '2017') and (top_n > 1):
             print(f'## Caution: collecting top {top_n} posts with the set min_score of {min_score} and min_date of {min_date} in batch {i} can take considerable time')
 
+def check_tag_query(prms, e621_tags_set):
+    tags = ','.join(prms["required_tags"]).replace(' ','')
+    tags = set(re.split(',|\|', tags))
+    if '' in tags:
+        tags.remove('')
+    asterisks = []
+    no_asterisks = []
+    for tag in tags:
+        if '*' in tag:
+            asterisks.append(tag)
+        else:
+            no_asterisks.append(tag)
+    if no_asterisks:
+        for tag in no_asterisks:
+            if tag not in e621_tags_set:
+                raise ValueError(f"required tag {tag} is not an e621 tag.")
+    if asterisks:
+        for tag in asterisks:
+            pattern = r'(^|\s)(' + re.escape(tag).replace(r'\*', r'\S*') + r')($|\s)'
+            for e621_tag in e621_tags_set:
+                if re.match(pattern,e621_tag) is not None:
+                    break
+            else:
+                raise ValueError(f"required tag {tag} is not found in any e621 tag.")
+
+    tags = ','.join(prms["blacklist"]).replace(' ','')
+    tags = set(re.split(',|\|', tags))
+    if '' in tags:
+        tags.remove('')
+    asterisks = []
+    no_asterisks = []
+    for tag in tags:
+        if '*' in tag:
+            asterisks.append(tag)
+        else:
+            no_asterisks.append(tag)
+    if no_asterisks:
+        for tag in no_asterisks:
+            if tag not in e621_tags_set:
+                raise ValueError(f"blacklist tag {tag} is not an e621 tag.")
+    if asterisks:
+        for tag in asterisks:
+            pattern = r'(^|\s)(' + re.escape(tag).replace(r'\*', r'\S*') + r')($|\s)'
+            for e621_tag in e621_tags_set:
+                if re.match(pattern,e621_tag) is not None:
+                    break
+            else:
+                raise ValueError(f"blacklist tag {tag} is not found in any e621 tag.")
+
 def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename=''):
     
     db_export_file_path = base_folder + '/db_export.html'
@@ -379,9 +429,10 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
     df = pl.concat([df,rdf])
     
     tag_to_cat = dict(zip(df["name"], df["category"]))
+    e621_tags_set = set(df["name"])
     del df
 
-    return e621_posts_list_filename, tag_to_cat
+    return e621_posts_list_filename, tag_to_cat, e621_tags_set
 
 def collect_posts(prms, batch_num, e621_posts_list_filename):
     
@@ -476,11 +527,18 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
         if prms["do_sort"][batch_num]:
             print(f'## Getting {prms["top_n"][batch_num]} highest scoring posts')
             top_n = prms["top_n"][batch_num]
-            df = df.filter(pl.col('score') >= pl.col('score').top_k(top_n).last()).sort('score', reverse=True).head(top_n)
+            df = df.filter(pl.col('score') >= pl.col('score').top_k(top_n).last()).sort('score', descending=True).head(top_n)
         else:
             print(f'## Getting {prms["top_n"][batch_num]} earliest posts')
             df = df.head(n=prms["top_n"][batch_num])
-
+    
+    num_rows = df.shape[0]
+    if num_rows == 0:
+        print(f'##\n## Collected 0 posts. Check your settings. Skipping batch {batch_num}\n##')
+        return None
+    else:
+        print(f'##\n## Collected {num_rows} posts.\n##')
+    
     posts_save_path = f'{prms["batch_folder"][batch_num]}/filtered_posts_{batch_num}.parquet'
     print(f'## Saving filtered e621 posts list for batch {batch_num} in {posts_save_path}')
     df.write_parquet(posts_save_path)
@@ -496,16 +554,18 @@ def create_searched_list(prms):
     for path in prms["save_searched_list_path"]:
         if path is not None:
             l = prms["get_searched_list_from_path"][path]
-            save_list_type = prms["get_searched_list_type_from_path"][path]
-            print(f"## Saving a list of {save_list_type}s from the collected posts")
-            with open(path, 'w') as f:
-                f.write('\n'.join([str(s) for s in l]))
+            if l:
+                save_list_type = prms["get_searched_list_type_from_path"][path]
+                print(f"## Saving a list of {save_list_type}s from the collected posts in {path}")
+                with open(path, 'w') as f:
+                    f.write('\n'.join([str(s) for s in l]))
 
 def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='', batch_mode=False):
 
     img_lists = []
     __df = pl.DataFrame()
     for batch_num, posts_save_path in zip(batch_nums, posts_save_paths):
+
         df = pl.read_parquet(posts_save_path)
         
         length = df.shape[0]
@@ -546,20 +606,33 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         if not prms["skip_post_download"][batch_num] and not batch_mode:
             df.select(['download_links','cmd_directory','cmd_filename']).write_csv(prms["batch_folder"][batch_num] + '/__.txt', sep='\n', has_header=False)
             print('## Downloading posts')
-            has_error = False
-            try:
-                stdout = subprocess.check_output(['aria2c','-c','-x','16','-k','1M','-i',prms["batch_folder"][batch_num] + '/__.txt'])
-            except subprocess.CalledProcessError as e:
+            cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',prms["batch_folder"][batch_num] + '/__.txt']
+            popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+            out_log = ''
+            ctr = 0
+            DL = ''
+            padding = len(str(length))
+            start_time = time.time()
+            for line in popen.stdout:
+                out = line.decode()
+                out_log += out
+                if 'Download complete' in out:
+                    ctr += 1
+                if '[DL:' in out:
+                    DL = out.split('[DL:')[1].split(']')[0]
+                elapsed = time.time() - start_time
+                print(f'\r## Downloading: {ctr: >{padding}}/{length} | {f"{elapsed//60:02.0f}:{elapsed % 60:02.0f}": >6}, {DL: >7}/s',end='')
+            print('')
+            popen.stdout.close()
+            return_code = popen.wait()
+            if return_code:
                 print('## Some unavailable posts found (you can ignore this)')
-                with open(prms["batch_folder"][batch_num] + f'/download_error_log_{batch_num}.txt', 'w') as f:
-                    f.write(e.output.decode('utf-8'))
-                has_error = True
-            if not has_error:
-                with open(prms["batch_folder"][batch_num] + f'/download_log_{batch_num}.txt', 'w') as f:
-                    f.write(stdout.decode('utf-8'))
-                print('## Posts downloaded')
+                with open(base_folder + f'/download_error_log_{batch_num}.txt', 'w') as f:
+                    f.write(out_log)
+                print('## Finished downloading, however some were not downloaded (most likely posts that have generally blacklisted tags)')
             else:
-                print('## Finished downloading, however some were not downloaded (most likely posts that have generally prms["blacklist"][batch_num]ed tags)')
+                with open(prms["batch_folder"][batch_num] + f'/download_log_{batch_num}.txt', 'w') as f:
+                    f.write(out_log)
             os.remove(prms["batch_folder"][batch_num] + '/__.txt')
         elif not prms["skip_post_download"][batch_num]:
             __df = __df.vstack(df.select(['download_links','cmd_directory','cmd_filename']))
@@ -653,45 +726,65 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                         else:
                             all_tag_count[tag] = length
     
-    if batch_mode and not prms["skip_post_download"][batch_num]:
+    if batch_mode and __df.shape[0] > 0:
         __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
+        length = __df.shape[0]
         print('## Downloading posts')
-        has_error = False
-        try:
-            stdout = subprocess.check_output(['aria2c','-c','-x','16','-k','1M','-i',base_folder + '/__.txt'])
-        except subprocess.CalledProcessError as e:
+        cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',base_folder + '/__.txt']
+        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+        out_log = ''
+        ctr = 0
+        DL = ''
+        padding = len(str(length))
+        start_time = time.time()
+        for line in popen.stdout:
+            out = line.decode()
+            out_log += out
+            if 'Download complete' in out:
+                ctr += 1
+            if '[DL:' in out:
+                DL = out.split('[DL:')[1].split(']')[0]
+            elapsed = time.time() - start_time
+            print(f'\r## Downloading: {ctr: >{padding}}/{length} | {f"{elapsed//60:02.0f}:{elapsed % 60:02.0f}": >6}, {DL: >7}/s',end='')
+        print('')
+        popen.stdout.close()
+        return_code = popen.wait()
+        if return_code:
             print('## Some unavailable posts found (you can ignore this)')
-            with open(prms["batch_folder"][batch_num] + f'/download_error_log_{batch_num}.txt', 'w') as f:
-                f.write(e.output.decode('utf-8'))
-            has_error = True
-        if not has_error:
-            with open(base_folder + '/download_log.txt', 'w') as f:
-                f.write(stdout.decode('utf-8'))
-            print('## Posts downloaded')
-        else:
+            with open(base_folder + '/download_error_log.txt', 'w') as f:
+                f.write(out_log)
             print('## Finished downloading, however some were not downloaded (most likely posts that have generally blacklisted tags)')
+        else:
+            with open(base_folder + '/download_log.txt', 'w') as f:
+                f.write(out_log)
         os.remove(base_folder + '/__.txt')
     
-    if not prms["skip_post_download"][batch_num]:
-        return img_lists
-    else:
-        return []
+    return img_lists
 
 def create_tag_count(prms):
     for path in set(prms["tag_count_list_folder"]):
+        empty = True
         if path:
             all_tag_count = prms["get_all_tag_counter_from_path"][path]
             category_ctr = prms["get_cat_tag_counter_from_path"][path]
             categories = set([item for sublist in prms["tag_order"] for item in sublist])
             cat_to_num = {'general':0,'artist':1,'rating':2,'copyright':3,'character':4,'species':5,'invalid':6,'meta':7,'lore':8}
-            for category in categories:                
-                cat_df = pl.DataFrame(list(category_ctr[cat_to_num[category]].items()), schema=[category,'count'])
-                cat_df = cat_df.sort(by=['count',category], reverse=[True, False])  
-                cat_df.write_csv(path + category + '.csv', has_header=True)
-            all_tags_df = pl.DataFrame(list(all_tag_count.items()), schema=['tag','count'])
-            all_tags_df = all_tags_df.sort(by=['count','tag'], reverse=[True, False])
-            all_tags_df.write_csv(path + 'tags.csv', has_header=True)
-            print(f'## Tag count CSVs {path} done!')
+            for category in categories:
+                cat_list = list(category_ctr[cat_to_num[category]].items())
+                if cat_list:
+                    empty = False
+                    cat_df = pl.DataFrame(cat_list, schema=[category,'count'])
+                    cat_df = cat_df.sort(by=['count',category], descending=[True, False])  
+                    cat_df.write_csv(path + category + '.csv', has_header=True)
+            all_tags_list = list(all_tag_count.items())
+            if all_tags_list:
+                empty = False
+                all_tags_df = pl.DataFrame(all_tags_list, schema=['tag','count'])
+                all_tags_df = all_tags_df.sort(by=['count','tag'], descending=[True, False])
+                all_tags_df.write_csv(path + 'tags.csv', has_header=True)
+            
+            if not empty:
+                print(f'## Tag count CSVs {path} done!')
 
 def init_counter():
     global counter
@@ -860,26 +953,42 @@ def main():
     prep_params(prms, batch_count, base_folder)
     
     print('## Checking required files')
-    e621_posts_list_filename, tag_to_cat = get_db(base_folder, args.postscsv, args.tagscsv, args.postsparquet, args.tagsparquet)
+    e621_posts_list_filename, tag_to_cat, e621_tags_set = get_db(base_folder, args.postscsv, args.tagscsv, args.postsparquet, args.tagsparquet)
+    
+    print('## Checking tag search query')
+    check_tag_query(prms, e621_tags_set)
+    del e621_tags_set
     
     manager = multiprocessing.Manager()
     failed_images = manager.list()
     counter = manager.Value(c_int,0)
     counter_lock = manager.Lock()
     
+    session_start_time = time.time()
     if args.phaseperbatch:
         for batch_num in range(batch_count):
             print(f"#### Batch {batch_num} ####")
             posts_save_path = collect_posts(prms, batch_num, e621_posts_list_filename)
-            image_list = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)[0]
-            if not prms["skip_resize"][batch_num]:
-                resize_imgs(prms, batch_num, num_cpu, image_list[0], image_list[1], image_list[2])
+            if posts_save_path is not None:
+                start_time = time.time()
+                image_list = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)[0]
+                elapsed = time.time() - start_time
+                print(f'## Batch {batch_num} download elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+                if not prms["skip_resize"][batch_num]:
+                    start_time = time.time()
+                    resize_imgs(prms, batch_num, num_cpu, image_list[0], image_list[1], image_list[2])
+                    elapsed = time.time() - start_time
+                    print(f'## Batch {batch_num} resize elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
         create_searched_list(prms)
         create_tag_count(prms)
     else:
         posts_save_paths = [collect_posts(prms, batch_num, e621_posts_list_filename) for batch_num in range(batch_count)]
         create_searched_list(prms)
+        posts_save_paths = [p for p in posts_save_paths if p]
+        start_time = time.time()
         list_of_image_lists = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
+        elapsed = time.time() - start_time
+        print(f'## Batch download elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
         create_tag_count(prms)
         img_folders = []
         img_files = []
@@ -899,7 +1008,10 @@ def main():
                 min_short_side += [prms["min_short_side"][batch_num]]*len(image_lists[0])
                 img_ext += [prms["img_ext"][batch_num]]*len(image_lists[0])
                 delete_original += [prms["delete_original"][batch_num]]*len(image_lists[0])
+        start_time = time.time()
         resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folder, min_short_side, img_ext, delete_original, prms["resized_img_folder"], prms["delete_original"], img_folder_batches, tag_file_batches, prms["method_tag_files"])
+        elapsed = time.time() - start_time
+        print(f'## Batch resize elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
 
     if failed_images:
         print(f'## Failed to resize {len(failed_images)} images')
@@ -907,6 +1019,8 @@ def main():
             f.write('\n'.join(failed_images))
 
     print('## Done!')
+    elapsed = time.time() - session_start_time
+    print(f'## Total session elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
     print('#################################################################')
     
 if __name__ == "__main__":
