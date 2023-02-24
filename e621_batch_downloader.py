@@ -397,44 +397,22 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
                 os.remove(tags_file_path)
         
         print('## Optimizing tags list data, this will take a few seconds')
-        pl.scan_csv(tags_csv).select(['name','category','post_count']).collect().write_parquet(e621_tags_list_filename)
+        pl.scan_csv(tags_csv).select(['name','category','post_count']).filter(pl.col('post_count') >= 1).drop(['post_count']).collect().write_parquet(e621_tags_list_filename)
         if not keep_db:
             os.remove(tags_csv)
-
-    tags_save_path = base_folder + '/tags/'
-    
-    os.makedirs(tags_save_path, exist_ok=True)
-    
-    category_labels = {0: "general", 1: "artist", 3: "copyright", 4: "character", 5: "species", 6: "invalid", 7: "meta", 8: "lore"}
-    
-    min_post_count = 1
-    
-    df = pl.scan_parquet(e621_tags_list_filename)
-    
-    df = df.filter(pl.col('post_count') >= min_post_count)
-    if not os.path.exists(f"{tags_save_path}tags.parquet"):
-        df.collect().write_parquet(f"{tags_save_path}tags.parquet")
-        print(f"## {tags_save_path}tags.parquet saved")
-    
-    for category in category_labels.keys():
-        if not os.path.exists(f"{tags_save_path + category_labels[category]}.parquet"):
-            newdf = df.filter(pl.col('category') == category)
-            newdf = newdf.drop(columns=['category'])
-            newdf.collect().write_parquet(f"{tags_save_path + category_labels[category]}.parquet")
-            print(f"## {tags_save_path + category_labels[category]}.parquet saved")
 
     rating_d = {
         'name':['explicit', 'questionable', 'safe'],
         'category':[2, 2, 2]
     }
     
-    df = pl.read_parquet(f"{tags_save_path}tags.parquet", columns=['name', 'category'])
+    df = pl.read_parquet(e621_tags_list_filename)
 
     rdf = pl.DataFrame(rating_d)
     df = pl.concat([df,rdf])
     
-    tag_to_cat = dict(zip(df["name"], df["category"]))
-    e621_tags_set = set(df["name"])
+    tag_to_cat = dict(zip(df["name"].to_list(), df["category"].to_list()))
+    e621_tags_set = set(df["name"].to_list())
     del df
 
     return e621_posts_list_filename, tag_to_cat, e621_tags_set
@@ -566,7 +544,8 @@ def create_searched_list(prms):
                     f.write('\n'.join([str(s) for s in l]))
 
 def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='', batch_mode=False):
-
+    global processed_tag_files
+    
     _img_lists_df = pl.DataFrame()
     __df = pl.DataFrame()
     for batch_num, posts_save_path in zip(batch_nums, posts_save_paths):
@@ -681,7 +660,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         if prms["include_tag_file"][batch_num]:
             for idx in range(length):
                 print(f'\r## Saving tag files for batch {batch_num}: {idx + 1}/{length}', end='')
-                if os.path.isfile(tagfilename_lst[idx]):
+                if tagfilename_lst[idx] in processed_tag_files:
                     continue
                 rating = rating_lst[idx]
                 if rating in rating_tags:
@@ -734,6 +713,8 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     
                 with open(tagfilename_lst[idx], 'w') as f:
                     f.write(updated_tags)
+                
+                processed_tag_files.add(tagfilename_lst[idx])
 
                 if path:
                     if prepend_tags:
@@ -916,7 +897,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
     print('')
 
 def main():
-    global failed_images, counter, counter_lock
+    global failed_images, counter, counter_lock, processed_tag_files
     print('##################### e621 posts downloader #####################')
     parser = argparse.ArgumentParser(description='e621 posts downloader')
     parser.add_argument('-f', '--basefolder', action='store', type=str, help='default output directory used for storing e621 db files and downloading posts', default='')
@@ -981,6 +962,8 @@ def main():
     print('## Checking tag search query')
     check_tag_query(prms, e621_tags_set)
     del e621_tags_set
+    
+    processed_tag_files = set()
     
     manager = multiprocessing.Manager()
     failed_images = manager.list()
