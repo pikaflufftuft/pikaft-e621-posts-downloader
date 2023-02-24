@@ -11,7 +11,7 @@
 - Highly customizable settings
 - Tag files processing
 - Image resizing by minimum shortest side
-- Fast, simple, and straightforward to use
+- Blazingly fast, simple, and straightforward to use
 - No rate limiting
 
 ## Requirements
@@ -62,6 +62,7 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 | `-tcsv` | `--tagscsv` | path to e621 tags csv |  |
 | `-ppar` | `--postsparquet` | path to e621 posts parquet |  |
 | `-tpar` | `--tagsparquet` | path to e621 tags parquet |  |
+| `-k` | `--keepdb` | pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files | *not passed* |
 
 Examples:
 
@@ -87,7 +88,7 @@ The downloader automatically downloads the latest e621 posts/tags db when you do
 | Parameter | type | Options | Description | Relative Parent folder |
 |:--- |:---:|:---:|:--- |:---:|
 | batch_folder | str | *any directory path* | Output directory for each batch | basefolder |
-| required_tags | str | *any e621 tag* | Separate tags with `,`<br />combine multiple tag groups with <code>&#124;</code><br />example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />search for posts that starts/ends with a certain word by adding `*` after/before the word<br />example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
+| required_tags | str | *any e621 tag* | Separate tags with `,`<br />Combine multiple tag groups with <code>&#124;</code><br />Example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />Search for posts that starts/ends with a certain word by adding `*` after/before the word<br />Example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
 | blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tag groups found as a subset in any tag group in `required_tags` are ignored. Example: `female` and `anthro, female` are subsets of `female, anthro` but `female, anthro, male` and `female, male` are not. Note that ignoring is based on the literal search query, e.g., `detailed*` is not a subset of `detailed_background` nor `detailed`. |  |
 | include_png<br />include_jpg<br />include_gif<br />include_webm<br />include_swf | bool | `true`, `false` | Setting to `false` will not include posts with that file type. At least one should be `true`. |  |
 | include_explicit<br />include_questionable<br />include_safe | bool | `true`, `false` | Setting to `false` will not include posts with that post rating. At least one should be `true`. |  |
@@ -160,6 +161,7 @@ Files/folders that use the same path are merged, not overwritten. For example, u
 ### Notes
 * When downloading, if the file already exists, it is skipped, unless, the file exists but was modified, it will download and the modified file will be renamed. Hence, I recommend not setting `delete_original` to `true` if you plan redownloading using the same destination folder.
 * When resizing, when `resized_img_folder` uses a different folder from the source folder, if the file in the destination folder already exists, it is skipped. It does not check if the already existing file has the specified `min_short_side`.
+* When running a new batch using the same save directories for tag files, tag count folders, and save_searched_list, tag files, tag count csvs, and save_searched_lists will be overwritten.
 
 ## License
 
