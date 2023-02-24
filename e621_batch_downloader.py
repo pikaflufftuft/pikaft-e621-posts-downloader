@@ -269,10 +269,6 @@ def prep_params(prms, batch_count, base_folder):
             os.makedirs(prms["resized_img_folder"][i], exist_ok=True)
 
     check_valid_param(prms["method_tag_files"], 'method_tag_files', ('relocate', 'copy'))
-        
-    for do_sort, min_score, min_date, top_n, i in zip(prms["do_sort"], prms["min_score"], prms["min_date"], prms["top_n"], range(batch_count)):
-        if do_sort and (min_score < 300) and (min_date < '2017') and (top_n > 1):
-            print(f'## Caution: collecting top {top_n} posts with the set min_score of {min_score} and min_date of {min_date} in batch {i} can take considerable time')
 
 def check_tag_query(prms, e621_tags_set):
     tags = ','.join(prms["required_tags"]).replace(' ','')
@@ -289,7 +285,7 @@ def check_tag_query(prms, e621_tags_set):
     if no_asterisks:
         for tag in no_asterisks:
             if tag not in e621_tags_set:
-                raise ValueError(f"required tag {tag} is not an e621 tag.")
+                raise ValueError(f'required tag "{tag}" is not an e621 tag.')
     if asterisks:
         for tag in asterisks:
             pattern = r'(^|\s)(' + re.escape(tag).replace(r'\*', r'\S*') + r')($|\s)'
@@ -297,7 +293,7 @@ def check_tag_query(prms, e621_tags_set):
                 if re.match(pattern,e621_tag) is not None:
                     break
             else:
-                raise ValueError(f"required tag {tag} is not found in any e621 tag.")
+                raise ValueError(f'required tag "{tag}" is not found in any e621 tag.')
 
     tags = ','.join(prms["blacklist"]).replace(' ','')
     tags = set(re.split(',|\|', tags))
@@ -313,7 +309,7 @@ def check_tag_query(prms, e621_tags_set):
     if no_asterisks:
         for tag in no_asterisks:
             if tag not in e621_tags_set:
-                raise ValueError(f"blacklist tag {tag} is not an e621 tag.")
+                raise ValueError(f'blacklist tag "{tag}" is not an e621 tag.')
     if asterisks:
         for tag in asterisks:
             pattern = r'(^|\s)(' + re.escape(tag).replace(r'\*', r'\S*') + r')($|\s)'
@@ -321,7 +317,7 @@ def check_tag_query(prms, e621_tags_set):
                 if re.match(pattern,e621_tag) is not None:
                     break
             else:
-                raise ValueError(f"blacklist tag {tag} is not found in any e621 tag.")
+                raise ValueError(f'blacklist tag "{tag}" is not found in any e621 tag.')
 
 def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename=''):
     
@@ -973,12 +969,12 @@ def main():
                 start_time = time.time()
                 image_list = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)[0]
                 elapsed = time.time() - start_time
-                print(f'## Batch {batch_num} download elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+                print(f'## Batch {batch_num} download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
                 if not prms["skip_resize"][batch_num]:
                     start_time = time.time()
                     resize_imgs(prms, batch_num, num_cpu, image_list[0], image_list[1], image_list[2])
                     elapsed = time.time() - start_time
-                    print(f'## Batch {batch_num} resize elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+                    print(f'## Batch {batch_num} resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
         create_searched_list(prms)
         create_tag_count(prms)
     else:
@@ -988,7 +984,7 @@ def main():
         start_time = time.time()
         list_of_image_lists = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
         elapsed = time.time() - start_time
-        print(f'## Batch download elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+        print(f'## Batch download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
         create_tag_count(prms)
         img_folders = []
         img_files = []
@@ -1011,7 +1007,7 @@ def main():
         start_time = time.time()
         resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folder, min_short_side, img_ext, delete_original, prms["resized_img_folder"], prms["delete_original"], img_folder_batches, tag_file_batches, prms["method_tag_files"])
         elapsed = time.time() - start_time
-        print(f'## Batch resize elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+        print(f'## Batch resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
 
     if failed_images:
         print(f'## Failed to resize {len(failed_images)} images')
@@ -1020,7 +1016,7 @@ def main():
 
     print('## Done!')
     elapsed = time.time() - session_start_time
-    print(f'## Total session elapsed time: {elapsed//60:.0f}:{elapsed % 60}')
+    print(f'## Total session elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
     print('#################################################################')
     
 if __name__ == "__main__":
