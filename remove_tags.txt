@@ -212,6 +212,9 @@ cow_humanoid
 crossover
 crossover_cosplay
 dated
+describing_genitalia
+describing_penis
+describing_size
 digimon
 digimon_(species)
 digiphilia
@@ -228,6 +231,8 @@ engrish
 equine_humanoid
 evenesko.d.fox_(artist)
 fan_character
+forced
+forced_orgasm
 fossil_pokemon
 fox_humanoid
 frog_humanoid
@@ -257,6 +262,7 @@ huge_filesize
 human_edit
 humor
 incest_(lore)
+inner_monologue
 insect_humanoid
 joke
 legendary_pokemon
@@ -272,6 +278,8 @@ monster_hunter_stories
 monster_hunter_stories_2:_wings_of_ruin
 mouse_humanoid
 multiple_versions
+name_drop
+name_in_inner_monologue
 nintendo
 nude_edit
 offscreen_character
@@ -288,6 +296,7 @@ pokemon_unite
 pokemorph
 pokephilia
 profanity
+questionable_consent
 rabbit_humanoid
 raccoon_humanoid
 regional_form_(pokemon)
@@ -306,6 +315,7 @@ story_at_source
 story_in_description
 tag_panic
 tagme
+text_emphasis
 tiger_humanoid
 translated
 translated_description
