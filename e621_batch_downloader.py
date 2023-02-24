@@ -319,7 +319,7 @@ def check_tag_query(prms, e621_tags_set):
             else:
                 raise ValueError(f'blacklist tag "{tag}" is not found in any e621 tag.')
 
-def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename=''):
+def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename='', keep_db=False):
     
     db_export_file_path = base_folder + '/db_export.html'
     if not os.path.isfile(db_export_file_path):
@@ -327,17 +327,18 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
     with open(db_export_file_path) as f:
         gfg = BeautifulSoup(''.join(f.readlines()), features='html.parser')
     gfg_lines = gfg.get_text().split('\n')
+    found_first = None
+    for line in gfg_lines:
+        if 'posts' in line:
+            found_first = True
+            posts_filename = line.split(' ')[0]
+        elif found_first:
+            break    
     
     if e621_posts_list_filename == '':
-        e621_posts_list_filename = f'{base_folder}/e621_posts_list.parquet'
+        e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
     if not os.path.isfile(e621_posts_list_filename):
-        found_first = None
-        for line in gfg_lines:
-            if 'posts' in line:
-                found_first = True
-                posts_filename = line.split(' ')[0]
-            elif found_first:
-                break
+
         if posts_csv == '':
             posts_csv = f'{base_folder}/{posts_filename[:-3]}'
         if not os.path.isfile(posts_csv):
@@ -355,21 +356,26 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             with gzip.open(posts_file_path, 'rb') as f_in:
                 with open(posts_csv, 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
-        
-        e621_posts_list_filename = f'{base_folder}/e621_posts_list.parquet'
+            if not keep_db:
+                os.remove(posts_file_path)
+            
         print('## Optimizing posts list data, this will take a few minutes')
         pl.scan_csv(posts_csv).select(['id', 'created_at', 'md5', 'rating', 'image_width', 'image_height', 'tag_string', 'fav_count', 'file_ext', 'is_deleted', 'score']).filter(pl.col('is_deleted') == 'f').collect().write_parquet(e621_posts_list_filename)
+        if not keep_db:
+            os.remove(posts_csv)
+        
+    found_first = None
+    for line in gfg_lines:
+        if 'tags' in line:
+            found_first = True
+            tags_filename = line.split(' ')[0]
+        elif found_first:
+            break
     
     if e621_tags_list_filename == '':
-        e621_tags_list_filename = f'{base_folder}/e621_tags_list.parquet'
+        e621_tags_list_filename = f'{base_folder}/{tags_filename[:-7]}.parquet'
     if not os.path.isfile(e621_tags_list_filename):
-        found_first = None
-        for line in gfg_lines:
-            if 'tags' in line:
-                found_first = True
-                tags_filename = line.split(' ')[0]
-            elif found_first:
-                break
+
         if tags_csv == '':
             tags_csv = f'{base_folder}/{tags_filename[:-3]}'
         if not os.path.isfile(tags_csv):
@@ -387,10 +393,13 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             with gzip.open(tags_file_path, 'rb') as f_in:
                 with open(tags_csv, 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
+            if not keep_db:
+                os.remove(tags_file_path)
         
-        e621_tags_list_filename = f'{base_folder}/e621_tags_list.parquet'
         print('## Optimizing tags list data, this will take a few seconds')
         pl.scan_csv(tags_csv).select(['name','category','post_count']).collect().write_parquet(e621_tags_list_filename)
+        if not keep_db:
+            os.remove(tags_csv)
 
     tags_save_path = base_folder + '/tags/'
     
@@ -547,7 +556,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     return posts_save_path
 
 def create_searched_list(prms):
-    for path in prms["save_searched_list_path"]:
+    for path in set(prms["save_searched_list_path"]):
         if path is not None:
             l = prms["get_searched_list_from_path"][path]
             if l:
@@ -558,7 +567,7 @@ def create_searched_list(prms):
 
 def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='', batch_mode=False):
 
-    img_lists = []
+    _img_lists_df = pl.DataFrame()
     __df = pl.DataFrame()
     for batch_num, posts_save_path in zip(batch_nums, posts_save_paths):
 
@@ -594,9 +603,19 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         df = df.with_columns((df[prms["save_filename_type"][batch_num]] + pl.repeat('.txt', n=length, eager=True)).alias("tagfilebasename"))
         df = df.with_columns((df['directory'] + df['tagfilebasename']).alias("tagfilename"))
         
-        img_df = df.select(['directory','filename','tagfilebasename','file_ext']).filter(pl.col('file_ext').str.contains('png|jpg'))
-    
-        img_lists.append([img_df['directory'].to_list(), img_df['filename'].to_list(), img_df['tagfilebasename'].to_list()])
+        if not prms["skip_post_download"][batch_num] and not prms["skip_resize"][batch_num]:
+            img_df = df.select(['directory','filename','tagfilebasename','file_ext']).filter(pl.col('file_ext').str.contains('png|jpg'))
+            img_df = img_df.drop(['file_ext'])
+            imgs_length = img_df.shape[0]
+            img_df = pl.concat([pl.DataFrame(
+                [pl.repeat(prms["resized_img_folder"][batch_num], n=imgs_length, eager=True).alias('resized_img_folder'),
+                pl.repeat(prms["min_short_side"][batch_num], n=imgs_length, eager=True).alias('min_short_side'),
+                pl.repeat(prms["img_ext"][batch_num], n=imgs_length, eager=True).alias('img_ext'),
+                pl.repeat(prms["delete_original"][batch_num], n=imgs_length, eager=True).alias('delete_original'),
+                pl.repeat(prms["method_tag_files"][batch_num], n=imgs_length, eager=True).alias('method_tag_files')]),
+                img_df],how="horizontal")
+            
+            _img_lists_df = _img_lists_df.vstack(img_df)
         
         
         if not prms["skip_post_download"][batch_num] and not batch_mode:
@@ -654,13 +673,21 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         append_tags = [s for s in append_tags if s != '']
         replace_underscores = prms["replace_underscores"][batch_num]
         remove_parentheses = prms["remove_parentheses"][batch_num]
+        
+        rating_lst = df['rating'].to_list()
+        tag_string_lst = df['tag_string'].to_list()
+        tagfilename_lst = df['tagfilename'].to_list()
+        
         if prms["include_tag_file"][batch_num]:
             for idx in range(length):
-                rating = df['rating'][idx]
+                print(f'\r## Saving tag files for batch {batch_num}: {idx + 1}/{length}', end='')
+                if os.path.isfile(tagfilename_lst[idx]):
+                    continue
+                rating = rating_lst[idx]
                 if rating in rating_tags:
-                    tags = [rating_tags[rating]] + df['tag_string'][idx].split(' ')
+                    tags = [rating_tags[rating]] + tag_string_lst[idx].split(' ')
                 else:
-                    tags = df['tag_string'][idx].split(' ')
+                    tags = tag_string_lst[idx].split(' ')
                 segregate = {}
                 unsegregated = []
                 for tag in tags:
@@ -705,26 +732,29 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                     updated_tags = updated_tags.replace('(','')
                     updated_tags = updated_tags.replace(')','')
     
-                with open(df['tagfilename'][idx], 'w') as f:
+                with open(tagfilename_lst[idx], 'w') as f:
                     f.write(updated_tags)
-                
-            if path:
-                if prepend_tags:
-                    for tag in prepend_tags:
-                        if tag in all_tag_count:
-                            all_tag_count[tag] += length
-                        else:
-                            all_tag_count[tag] = length
-                if append_tags:
-                    for tag in append_tags:
-                        if tag in all_tag_count:
-                            all_tag_count[tag] += length
-                        else:
-                            all_tag_count[tag] = length
+
+                if path:
+                    if prepend_tags:
+                        for tag in prepend_tags:
+                            if tag in all_tag_count:
+                                all_tag_count[tag] += 1
+                            else:
+                                all_tag_count[tag] = 1
+                    if append_tags:
+                        for tag in append_tags:
+                            if tag in all_tag_count:
+                                all_tag_count[tag] += 1
+                            else:
+                                all_tag_count[tag] = 1
+            print('')
     
     if batch_mode and __df.shape[0] > 0:
-        __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
+        __df = __df.unique(subset=['cmd_directory','cmd_filename'])
         length = __df.shape[0]
+        __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
+        print(f"##\n## Found {length} unique posts to save\n##")
         print('## Downloading posts')
         cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',base_folder + '/__.txt']
         popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
@@ -755,7 +785,8 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 f.write(out_log)
         os.remove(base_folder + '/__.txt')
     
-    return img_lists
+    _img_lists_df = _img_lists_df.unique(subset=['directory','filename'])
+    return _img_lists_df
 
 def create_tag_count(prms):
     for path in set(prms["tag_count_list_folder"]):
@@ -847,47 +878,42 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     
     init_counter()
     
-    if img_files:
-        print(f'## Resizing Images for batch {batch_num} ...')
+    length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
         pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(min_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
-    
-    if method == 'relocate':
-        print('## Relocating tag files')
-    else:
-        print('## Copying tag files')
-    for img_folder, tag_file in zip(img_folders, tag_files):
+
+    for i, img_folder, tag_file in zip(range(1,length+1), img_folders, tag_files):
         if (not delete_original) and (resized_img_folder != img_folder):
             if method == 'relocate':
+                print(f'\r## Relocating tag files {i}/{length}',end='')
                 os.rename(img_folder + tag_file, resized_img_folder + tag_file)
             else: # copy
+                print(f'\r## Copying tag files {i}/{length}',end='')
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
+    print('')
 
-def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_short_side, img_ext, delete_original, resized_img_folder_batches, delete_original_batches, img_folder_batches, tag_file_batches, method_tag_files):
+def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_short_side, img_ext, delete_original, tag_files, method_tag_files):
     global failed_images, counter, counter_lock
     
     init_counter()
-    
-    if img_files:
-        print('## Resizing Images ...')
+        
+    length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, min_short_side, repeat(len(img_files)), repeat(failed_images), delete_original, resized_img_folders))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, min_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
     print('')
 
-    for i, res_img_fol_batch, del_org_batch, img_fol_batch, tag_file_batch, method in zip(range(len(resized_img_folder_batches)), resized_img_folder_batches, delete_original_batches, img_folder_batches, tag_file_batches, method_tag_files):
-        if method == 'relocate':
-            print(f'## Relocating tag files. Batch {i}')
-        else:
-            print(f'## Copying tag files. Batch {i}')
-        for img_folder, tag_file in zip(img_fol_batch, tag_file_batch):
-            if (not del_org_batch) and (res_img_fol_batch != img_folder):
-                if method == 'relocate':
-                    os.rename(img_folder + tag_file, res_img_fol_batch + tag_file)
-                else: # copy
-                    shutil.copyfile(img_folder + tag_file, res_img_fol_batch + tag_file)
+    for i, img_fol, res_fol, delete, tag_file, method in zip(range(1,length+1), img_folders, resized_img_folders, delete_original, tag_files, method_tag_files):
+        if (not delete) and (res_fol != img_fol):
+            if method == 'relocate':
+                print(f'\r## Relocating tag files {i}/{length}',end='')
+                os.rename(img_fol + tag_file, res_fol + tag_file)
+            else:
+                print(f'\r## Copying tag files {i}/{length}',end='')
+                shutil.copyfile(img_fol + tag_file, res_fol + tag_file)
+    print('')
 
 def main():
     global failed_images, counter, counter_lock
@@ -901,6 +927,7 @@ def main():
     parser.add_argument('-tcsv', '--tagscsv', action='store', type=str, help='path to e621 tags csv', default='')
     parser.add_argument('-ppar', '--postsparquet', action='store', type=str, help='path to e621 posts parquet', default='')
     parser.add_argument('-tpar', '--tagsparquet', action='store', type=str, help='path to e621 tags parquet', default='')
+    parser.add_argument('-k', '--keepdb', action='store_true', help="pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files")
     args = parser.parse_args()
 
     base_folder = os.path.dirname(os.path.abspath(__file__))
@@ -949,7 +976,7 @@ def main():
     prep_params(prms, batch_count, base_folder)
     
     print('## Checking required files')
-    e621_posts_list_filename, tag_to_cat, e621_tags_set = get_db(base_folder, args.postscsv, args.tagscsv, args.postsparquet, args.tagsparquet)
+    e621_posts_list_filename, tag_to_cat, e621_tags_set = get_db(base_folder, args.postscsv, args.tagscsv, args.postsparquet, args.tagsparquet, args.keepdb)
     
     print('## Checking tag search query')
     check_tag_query(prms, e621_tags_set)
@@ -967,12 +994,12 @@ def main():
             posts_save_path = collect_posts(prms, batch_num, e621_posts_list_filename)
             if posts_save_path is not None:
                 start_time = time.time()
-                image_list = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)[0]
+                image_list_df = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)
                 elapsed = time.time() - start_time
                 print(f'## Batch {batch_num} download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
                 if not prms["skip_resize"][batch_num]:
                     start_time = time.time()
-                    resize_imgs(prms, batch_num, num_cpu, image_list[0], image_list[1], image_list[2])
+                    resize_imgs(prms, batch_num, num_cpu, image_list_df["directory"].to_list(), image_list_df["filename"].to_list(), image_list_df["tagfilebasename"].to_list())
                     elapsed = time.time() - start_time
                     print(f'## Batch {batch_num} resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
         create_searched_list(prms)
@@ -982,30 +1009,20 @@ def main():
         create_searched_list(prms)
         posts_save_paths = [p for p in posts_save_paths if p]
         start_time = time.time()
-        list_of_image_lists = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
+        image_list_df = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
         elapsed = time.time() - start_time
         print(f'## Batch download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
         create_tag_count(prms)
-        img_folders = []
-        img_files = []
-        img_folder_batches = []
-        tag_file_batches = []
-        resized_img_folder = []
-        min_short_side = []
-        img_ext = []
-        delete_original = []
-        for batch_num, image_lists in enumerate(list_of_image_lists):
-            if not prms["skip_resize"][batch_num]:
-                img_folders += image_lists[0]
-                img_files += image_lists[1]
-                img_folder_batches.append(image_lists[0])
-                tag_file_batches.append(image_lists[2])
-                resized_img_folder += [prms["resized_img_folder"][batch_num]]*len(image_lists[0])
-                min_short_side += [prms["min_short_side"][batch_num]]*len(image_lists[0])
-                img_ext += [prms["img_ext"][batch_num]]*len(image_lists[0])
-                delete_original += [prms["delete_original"][batch_num]]*len(image_lists[0])
         start_time = time.time()
-        resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folder, min_short_side, img_ext, delete_original, prms["resized_img_folder"], prms["delete_original"], img_folder_batches, tag_file_batches, prms["method_tag_files"])
+        resize_imgs_batch(num_cpu,
+                          image_list_df["directory"].to_list(),
+                          image_list_df["filename"].to_list(),
+                          image_list_df["resized_img_folder"].to_list(),
+                          image_list_df["min_short_side"].to_list(),
+                          image_list_df["img_ext"].to_list(),
+                          image_list_df["delete_original"].to_list(),
+                          image_list_df["tagfilebasename"].to_list(),
+                          image_list_df["method_tag_files"].to_list())
         elapsed = time.time() - start_time
         print(f'## Batch resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
 
