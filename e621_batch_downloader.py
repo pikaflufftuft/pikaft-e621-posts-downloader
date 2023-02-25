@@ -97,17 +97,25 @@ def prep_params(prms, batch_count, base_folder):
         if prms["min_area"][idx] < 0:
             prms["min_area"][idx] = -1
     
+    check_valid_param(prms["do_sort"], 'do_sort', (True,False))
+    check_valid_param(prms["top_n"], 'top_n', None, int)
+    for i, n in enumerate(prms["top_n"]):
+        if n < 1:
+            prms["top_n"][i] = -1
+    
     check_valid_param(prms["skip_posts_file"], 'skip_posts_file', None, str)
     for f in prms["skip_posts_file"]:
         if not os.path.isfile(f) and f != '':
             raise RuntimeError(f'skip_posts_file {f} not found')  
     
     check_valid_param(prms["skip_posts_type"], 'skip_posts_type', ('id','md5'))
-    check_valid_param(prms["do_sort"], 'do_sort', (True,False))
-    check_valid_param(prms["top_n"], 'top_n', None, int)
-    for i, n in enumerate(prms["top_n"]):
-        if n < 2:
-            prms["top_n"][i] = 1
+    
+    check_valid_param(prms["collect_from_listed_posts_file"], 'collect_from_listed_posts_file', None, str)
+    for f in prms["collect_from_listed_posts_file"]:
+        if not os.path.isfile(f) and f != '':
+            raise RuntimeError(f'collect_from_listed_posts_file {f} not found')
+    check_valid_param(prms["collect_from_listed_posts_type"], 'collect_from_listed_posts_type', ('id','md5'))
+    check_valid_param(prms["apply_filter_to_listed_posts"], 'apply_filter_to_listed_posts', (True,False))
     
     check_valid_param(prms["save_searched_list_type"], 'save_searched_list_type', ('id','md5', 'None'))
     
@@ -322,8 +330,7 @@ def check_tag_query(prms, e621_tags_set):
 def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename='', keep_db=False):
     
     db_export_file_path = base_folder + '/db_export.html'
-    if not os.path.isfile(db_export_file_path):
-        os.system(f'curl https://e621.net/db_export/ -o {db_export_file_path}')
+    subprocess.check_output(f'curl https://e621.net/db_export/ -o {db_export_file_path}', shell=True)
     with open(db_export_file_path) as f:
         gfg = BeautifulSoup(''.join(f.readlines()), features='html.parser')
     gfg_lines = gfg.get_text().split('\n')
@@ -360,7 +367,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
                 os.remove(posts_file_path)
             
         print('## Optimizing posts list data, this will take a few minutes')
-        pl.scan_csv(posts_csv).select(['id', 'created_at', 'md5', 'rating', 'image_width', 'image_height', 'tag_string', 'fav_count', 'file_ext', 'is_deleted', 'score']).filter(pl.col('is_deleted') == 'f').collect().write_parquet(e621_posts_list_filename)
+        pl.scan_csv(posts_csv).select(['id', 'created_at', 'md5', 'source', 'rating', 'image_width', 'image_height', 'tag_string', 'fav_count', 'file_ext', 'is_deleted', 'score']).filter(pl.col('is_deleted') == 'f').collect().write_parquet(e621_posts_list_filename)
         if not keep_db:
             os.remove(posts_csv)
         
@@ -421,6 +428,31 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     
     print(f"## Collecting posts for batch {batch_num}")
     df = pl.read_parquet(e621_posts_list_filename)
+            
+    if prms["collect_from_listed_posts_file"][batch_num]:
+        print(f'## Collecting listed posts in {prms["collect_from_listed_posts_file"][batch_num]}')
+        with open(prms["collect_from_listed_posts_file"][batch_num], 'r') as f:
+            collect_from_listed_posts = list(set([s.strip() for s in f]))
+        df = df.filter(pl.col(prms["collect_from_listed_posts_type"][batch_num]).is_in(collect_from_listed_posts))
+    
+    if prms["collect_from_listed_posts_file"][batch_num] and not prms["apply_filter_to_listed_posts"][batch_num]:
+        num_rows = df.shape[0]
+        if num_rows == 0:
+            print(f'##\n## Collected 0 posts. Check your settings. Skipping batch {batch_num}\n##')
+            return None
+        else:
+            print(f'##\n## Collected {num_rows} posts.\n##')
+        
+        posts_save_path = f'{prms["batch_folder"][batch_num]}/filtered_posts_{batch_num}.parquet'
+        print(f'## Saving filtered e621 posts list for batch {batch_num} in {posts_save_path}')
+        df.write_parquet(posts_save_path)
+    
+        if prms["save_searched_list_type"][batch_num] != 'None':
+            prms["get_searched_list_from_path"][prms["save_searched_list_path"][batch_num]].update(
+                df[prms["save_searched_list_type"][batch_num]].to_list()
+                )
+    
+        return posts_save_path
 
     if not prms["include_explicit"][batch_num]:
         df = df.filter(pl.col('rating') != 'e')
@@ -434,6 +466,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     
     print(f'## Removing posts with favorite count < {prms["min_fav_count"][batch_num]}')
     df = df.filter(pl.col('fav_count') >= prms["min_fav_count"][batch_num])
+    df = df.drop(columns=['fav_count'])
     
     included_file_ext = set(['png'*prms["include_png"][batch_num], 'jpg'*prms["include_jpg"][batch_num], 'gif'*prms["include_gif"][batch_num], 'webm'*prms["include_webm"][batch_num], 'swf'*prms["include_swf"][batch_num]])
     if '' in included_file_ext:
@@ -448,7 +481,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
         df = df.drop(columns=['created_at'])
     
     if prms["skip_posts_file"][batch_num]:
-        print(f'## skipping listed posts in {prms["skip_posts_file"][batch_num]}')
+        print(f'## Skipping listed posts in {prms["skip_posts_file"][batch_num]}')
         with open(prms["skip_posts_file"][batch_num], 'r') as f:
             skip_posts = list(set([s.strip() for s in f]))
         df = df.filter(~pl.col(prms["skip_posts_type"][batch_num]).is_in(skip_posts))
@@ -506,7 +539,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
                 df = df.filter(~sub_expr)
 
     
-    if prms["top_n"][batch_num] > 1:
+    if prms["top_n"][batch_num] > 0:
         if prms["do_sort"][batch_num]:
             print(f'## Getting {prms["top_n"][batch_num]} highest scoring posts')
             top_n = prms["top_n"][batch_num]
@@ -543,11 +576,49 @@ def create_searched_list(prms):
                 with open(path, 'w') as f:
                     f.write('\n'.join([str(s) for s in l]))
 
+def run_download(file, length, dwn_log_path, err_log_path):
+    failed_md5 = set()
+    cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',file]
+    popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    out_log = ''
+    ctr = 0
+    DL = ''
+    padding = len(str(length))
+    start_time = time.time()
+    for line in popen.stdout:
+        out = line.decode()
+        out_log += out
+        if 'Download complete' in out:
+            ctr += 1
+        if '[DL:' in out:
+            DL = out.split('[DL:')[1].split(']')[0]
+        if 'Download aborted. URI=https://static1.e621.net/data/' in out:
+            ctr += 1
+            failed_md5.add(out.split('Download aborted. URI=https://static1.e621.net/data/')[1].split('.')[0].split('/')[2])
+        elapsed = time.time() - start_time
+        print(f'\r## Downloading: {ctr: >{padding}}/{length} | {f"{elapsed//60:02.0f}:{elapsed % 60:02.0f}": >6}, {DL: >7}/s',end='')
+    print('')
+    popen.stdout.close()
+    return_code = popen.wait()
+
+    if return_code:
+        with open(err_log_path, 'w', encoding="utf-8") as f:
+            f.write(out_log)
+    else:
+        with open(dwn_log_path, 'w', encoding="utf-8") as f:
+            f.write(out_log)
+    os.remove(file)
+    return failed_md5
+
 def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='', batch_mode=False):
     global processed_tag_files
     
     _img_lists_df = pl.DataFrame()
     __df = pl.DataFrame()
+    _md5_source = pl.DataFrame()
+    failed_md5 = set()
+    df_list_for_tag_files = []
+    
     for batch_num, posts_save_path in zip(batch_nums, posts_save_paths):
 
         df = pl.read_parquet(posts_save_path)
@@ -571,19 +642,19 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         dot = pl.repeat('.', n=length, eager=True)
         df = df.with_columns((base + df['md5'].str.slice(0,length=2) + slash + df['md5'].str.slice(2,length=2) + slash + df['md5'] + dot + df['file_ext']).alias("download_links"))
         
-        # use dict_map in new version
         df = df.join(pl.DataFrame({'directory': ext_directory.values(), 'key': ext_directory.keys()}), left_on='file_ext', right_on='key', how='left')
         
         df = df.with_columns((pl.repeat(' dir=', n=length, eager=True) + df['directory']).alias("cmd_directory"))
     
         df = df.with_columns(df[prms["save_filename_type"][batch_num]].cast(str))
+        df = df.with_columns((df[prms["save_filename_type"][batch_num]]).alias("filename_no_ext"))
         df = df.with_columns((df[prms["save_filename_type"][batch_num]] + dot + df['file_ext']).alias("filename"))
         df = df.with_columns((pl.repeat(' out=', n=length, eager=True) + df['filename']).alias("cmd_filename"))
         df = df.with_columns((df[prms["save_filename_type"][batch_num]] + pl.repeat('.txt', n=length, eager=True)).alias("tagfilebasename"))
         df = df.with_columns((df['directory'] + df['tagfilebasename']).alias("tagfilename"))
         
         if not prms["skip_post_download"][batch_num] and not prms["skip_resize"][batch_num]:
-            img_df = df.select(['directory','filename','tagfilebasename','file_ext']).filter(pl.col('file_ext').str.contains('png|jpg'))
+            img_df = df.select(['directory','filename_no_ext','filename','tagfilebasename','file_ext']).filter(pl.col('file_ext').str.contains('png|jpg'))
             img_df = img_df.drop(['file_ext'])
             imgs_length = img_df.shape[0]
             img_df = pl.concat([pl.DataFrame(
@@ -596,42 +667,144 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             
             _img_lists_df = _img_lists_df.vstack(img_df)
         
+        if not prms["skip_post_download"][batch_num]:
+            _md5_source = _md5_source.vstack(df.select(['id','md5','source','directory','filename_no_ext','filename']))
         
         if not prms["skip_post_download"][batch_num] and not batch_mode:
             df.select(['download_links','cmd_directory','cmd_filename']).write_csv(prms["batch_folder"][batch_num] + '/__.txt', sep='\n', has_header=False)
-            print('## Downloading posts')
-            cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',prms["batch_folder"][batch_num] + '/__.txt']
-            popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            out_log = ''
-            ctr = 0
-            DL = ''
-            padding = len(str(length))
-            start_time = time.time()
-            for line in popen.stdout:
-                out = line.decode()
-                out_log += out
-                if 'Download complete' in out:
-                    ctr += 1
-                if '[DL:' in out:
-                    DL = out.split('[DL:')[1].split(']')[0]
-                elapsed = time.time() - start_time
-                print(f'\r## Downloading: {ctr: >{padding}}/{length} | {f"{elapsed//60:02.0f}:{elapsed % 60:02.0f}": >6}, {DL: >7}/s',end='')
-            print('')
-            popen.stdout.close()
-            return_code = popen.wait()
-            if return_code:
-                print('## Some unavailable posts found (you can ignore this)')
-                with open(base_folder + f'/download_error_log_{batch_num}.txt', 'w') as f:
-                    f.write(out_log)
-                print('## Finished downloading, however some were not downloaded (most likely posts that have generally blacklisted tags)')
-            else:
-                with open(prms["batch_folder"][batch_num] + f'/download_log_{batch_num}.txt', 'w') as f:
-                    f.write(out_log)
-            os.remove(prms["batch_folder"][batch_num] + '/__.txt')
+
         elif not prms["skip_post_download"][batch_num]:
             __df = __df.vstack(df.select(['download_links','cmd_directory','cmd_filename']))
         
-        df = df.drop(['download_links','directory','cmd_directory','file_ext','filename','cmd_filename','tagfilebasename'])
+        df_list_for_tag_files.append(df.drop(['download_links','directory','cmd_directory','file_ext','filename','cmd_filename']))
+    
+    if not batch_mode:
+        print('## Downloading posts')
+        failed_set = run_download(prms["batch_folder"][batch_num] + '/__.txt', length, prms["batch_folder"][batch_num] + f'/download_log_{batch_num}.txt', prms["batch_folder"][batch_num] + f'/download_error_log_{batch_num}.txt')
+        if failed_set:
+            print('## Some posts were downloaded unsuccessfully.')
+            failed_md5.update(failed_set)
+    
+    elif __df.shape[0] > 0:
+        __df = __df.unique(subset=['cmd_directory','cmd_filename'])
+        length = __df.shape[0]
+        __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
+        print(f"##\n## Found {length} unique posts to save\n##")
+        print('## Downloading posts')
+        failed_set = run_download(base_folder + '/__.txt', length, base_folder + '/download_log.txt', base_folder + '/download_error_log.txt')
+        if failed_set:
+            print('## Some posts were downloaded unsuccessfully.')
+            failed_md5.update(failed_set)
+    
+    if failed_md5:
+        print(f'## Retrying download for {len(failed_md5)} failed post downloads')
+        _file = base_folder + '/__retry.txt'
+        df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['download_links','cmd_directory','cmd_filename']).write_csv(_file, sep='\n', has_header=False)
+        failed_set_part_2 = run_download(_file, len(failed_md5), base_folder + '/redownload_log.txt', base_folder + '/redownload_error_log.txt')
+        failed_md5 = failed_md5 & failed_set_part_2
+    
+    validate_redownload = set()
+    replace_from_img_list = []
+    remove_from_img_list = []
+    tagfiles_no_post = set()
+    ids_no_post = set()
+      
+    if failed_md5:
+        print(f'## Attempting to redownload {len(failed_md5)} unavailable posts using alternative source(s)')
+        md5_and_source = _md5_source.filter(pl.col('md5').str.contains('|'.join(failed_md5)))
+        num_redownload = 0
+        __file = ''
+        for source, directory, filename_from_type, filename, _id in zip(md5_and_source["source"].to_list(), md5_and_source["directory"].to_list(), md5_and_source["filename_no_ext"].to_list(), md5_and_source["filename"].to_list(), md5_and_source["id"].to_list()):
+            links = source.split('\n')
+            ext_links = {'.png':[],'.jpg':[],'.gif':[],'.webm':[],'.swf':[]}
+            found_one = False
+            for link in links:
+                for ext in ext_links.keys():
+                    if ext in link:
+                        found_one = True
+                        ext_links[ext].append(link)
+            if not found_one:
+                remove_from_img_list.append((directory,filename))
+                tagfiles_no_post.add(filename_from_type + '.txt')
+                ids_no_post.add(_id)
+            else:
+                num_redownload += 1
+                _fline = ''
+                for ext, links in ext_links.items():
+                    if links:
+                        if _fline == '':
+                            _fline = '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
+                        else:
+                            _fline += '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
+                        validate_redownload.add((directory, filename_from_type, ext, _id))
+                if __file == '':
+                    __file = _fline
+                else:
+                    __file += '\n' + _fline
+        
+        with open(base_folder + '/__.txt', 'w', encoding="utf-8") as f:
+            f.write(__file)
+        
+        if num_redownload > 0:
+            print(f'## Found {num_redownload} direct file links for redownloading.')
+            if not batch_mode:
+                run_download(base_folder + '/__.txt', num_redownload, prms["batch_folder"][batch_num] + f'/redownload_log_b_{batch_num}.txt', prms["batch_folder"][batch_num] + f'/redownload_error_log_b_{batch_num}.txt')
+            else:
+                run_download(base_folder + '/__.txt', num_redownload, base_folder + '/redownload_log_b.txt', base_folder + '/redownload_error_log_b.txt')
+        else:
+            print('## Found 0 direct file links for redownloading.')
+        
+        validated = {}
+        for directory, filename_from_type, ext, _id in validate_redownload:
+            if os.path.isfile(directory + filename_from_type + ext):
+                if directory + filename_from_type not in validated:
+                    validated[directory + filename_from_type] = ext
+                    replace_from_img_list.append((directory, filename_from_type, ext))
+                else:
+                    if validated[directory + filename_from_type] != ext:
+                        os.remove(directory + filename_from_type + ext)
+            else:
+                remove_from_img_list.append((directory,filename_from_type + ext))
+                tagfiles_no_post.add(filename_from_type + '.txt')
+                ids_no_post.add(_id)
+        
+        if tagfiles_no_post:
+            if not batch_mode:
+                tagfiles_no_post_folder = prms["batch_folder"][batch_nums[0]] + '/tag_files_no_post/'
+                ids_no_post_folder = prms["batch_folder"][batch_nums[0]] + '/'
+            else:
+                tagfiles_no_post_folder = base_folder + '/tag_files_no_post/'
+                ids_no_post_folder = base_folder + '/'
+            os.makedirs(tagfiles_no_post_folder, exist_ok=True)
+            os.makedirs(ids_no_post_folder, exist_ok=True)
+        
+        if not prms["skip_resize"][batch_num] and (replace_from_img_list or remove_from_img_list):
+            img_list_length = _img_lists_df.shape[0]
+            rows_to_remove = [0]*img_list_length
+            for idx, img_directory, img_filename_no_ext, img_filename in zip(range(img_list_length),_img_lists_df['directory'].to_list(),_img_lists_df['filename_no_ext'].to_list(),_img_lists_df['filename'].to_list()):
+                for directory, filename_no_ext, ext in reversed(replace_from_img_list):
+                    if (img_directory == directory) and (img_filename_no_ext == filename_no_ext):
+                        if img_filename != filename_no_ext + ext:
+                            _img_lists_df = _img_lists_df.with_columns(_img_lists_df['filename'].set_at_idx(idx, filename_no_ext + ext))
+                            replace_from_img_list = replace_from_img_list[:-1]
+                            break
+                for directory, filename in reversed(remove_from_img_list):
+                    if (img_directory == directory) and (img_filename == filename):
+                        rows_to_remove[idx] = None
+                        remove_from_img_list = remove_from_img_list[:-1]
+                        break
+            _img_lists_df = _img_lists_df.with_columns(pl.Series(rows_to_remove).alias('to_remove')).drop_nulls().drop('to_remove')
+            
+        _failed_df = df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['id','md5','source'])
+
+        with open(ids_no_post_folder + 'failed_download_posts_alt_source_list.txt', 'w', encoding="utf-8") as f:
+            for _id, md5, source in zip(_failed_df["id"].to_list(),_failed_df["md5"].to_list(),_failed_df["source"].to_list()):
+                f.write(f'id:{_id}\nmd5:{md5}\nsource:[ {source} ]\n')
+    
+    for batch_num, df in zip(batch_nums, df_list_for_tag_files):
+        
+        length = df.shape[0]
+        
         rating_tags = {}
         if prms["include_explicit_tag"][batch_num]:
             rating_tags['e'] = 'explicit'
@@ -655,13 +828,17 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         
         rating_lst = df['rating'].to_list()
         tag_string_lst = df['tag_string'].to_list()
+        tagfilebasename_lst = df['tagfilebasename'].to_list()
         tagfilename_lst = df['tagfilename'].to_list()
-        
+
         if prms["include_tag_file"][batch_num]:
             for idx in range(length):
                 print(f'\r## Saving tag files for batch {batch_num}: {idx + 1}/{length}', end='')
                 if tagfilename_lst[idx] in processed_tag_files:
                     continue
+                dont_count = False
+                if tagfilebasename_lst[idx] in tagfiles_no_post:
+                    dont_count = True
                 rating = rating_lst[idx]
                 if rating in rating_tags:
                     tags = [rating_tags[rating]] + tag_string_lst[idx].split(' ')
@@ -683,7 +860,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                                         segregate[category_num] = [tag]
                                 else:
                                     unsegregated.append(tag)
-                                if path:
+                                if path and not dont_count:
                                     if tag in all_tag_count:
                                         all_tag_count[tag] += 1
                                     else:
@@ -711,12 +888,16 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                     updated_tags = updated_tags.replace('(','')
                     updated_tags = updated_tags.replace(')','')
     
-                with open(tagfilename_lst[idx], 'w') as f:
-                    f.write(updated_tags)
+                if tagfilebasename_lst[idx] in tagfiles_no_post:
+                    with open(tagfiles_no_post_folder + tagfilebasename_lst[idx], 'w', encoding="utf-8") as f:
+                        f.write(updated_tags)
+                else:
+                    with open(tagfilename_lst[idx], 'w', encoding="utf-8") as f:
+                        f.write(updated_tags)
                 
                 processed_tag_files.add(tagfilename_lst[idx])
 
-                if path:
+                if path and not dont_count:
                     if prepend_tags:
                         for tag in prepend_tags:
                             if tag in all_tag_count:
@@ -730,43 +911,9 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                             else:
                                 all_tag_count[tag] = 1
             print('')
-    
-    if batch_mode and __df.shape[0] > 0:
-        __df = __df.unique(subset=['cmd_directory','cmd_filename'])
-        length = __df.shape[0]
-        __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
-        print(f"##\n## Found {length} unique posts to save\n##")
-        print('## Downloading posts')
-        cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',base_folder + '/__.txt']
-        popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-        out_log = ''
-        ctr = 0
-        DL = ''
-        padding = len(str(length))
-        start_time = time.time()
-        for line in popen.stdout:
-            out = line.decode()
-            out_log += out
-            if 'Download complete' in out:
-                ctr += 1
-            if '[DL:' in out:
-                DL = out.split('[DL:')[1].split(']')[0]
-            elapsed = time.time() - start_time
-            print(f'\r## Downloading: {ctr: >{padding}}/{length} | {f"{elapsed//60:02.0f}:{elapsed % 60:02.0f}": >6}, {DL: >7}/s',end='')
-        print('')
-        popen.stdout.close()
-        return_code = popen.wait()
-        if return_code:
-            print('## Some unavailable posts found (you can ignore this)')
-            with open(base_folder + '/download_error_log.txt', 'w') as f:
-                f.write(out_log)
-            print('## Finished downloading, however some were not downloaded (most likely posts that have generally blacklisted tags)')
-        else:
-            with open(base_folder + '/download_log.txt', 'w') as f:
-                f.write(out_log)
-        os.remove(base_folder + '/__.txt')
-    
-    _img_lists_df = _img_lists_df.unique(subset=['directory','filename'])
+
+    if not prms["skip_resize"][batch_num]:
+        _img_lists_df = _img_lists_df.unique(subset=['directory','filename_no_ext'])
     return _img_lists_df
 
 def create_tag_count(prms):
@@ -977,10 +1124,10 @@ def main():
             posts_save_path = collect_posts(prms, batch_num, e621_posts_list_filename)
             if posts_save_path is not None:
                 start_time = time.time()
-                image_list_df = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat)
+                image_list_df = download_posts(prms, [batch_num], [posts_save_path], tag_to_cat, base_folder)
                 elapsed = time.time() - start_time
                 print(f'## Batch {batch_num} download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
-                if not prms["skip_resize"][batch_num]:
+                if not prms["skip_resize"][batch_num] and (image_list_df.shape[0] > 0):
                     start_time = time.time()
                     resize_imgs(prms, batch_num, num_cpu, image_list_df["directory"].to_list(), image_list_df["filename"].to_list(), image_list_df["tagfilebasename"].to_list())
                     elapsed = time.time() - start_time
@@ -991,23 +1138,25 @@ def main():
         posts_save_paths = [collect_posts(prms, batch_num, e621_posts_list_filename) for batch_num in range(batch_count)]
         create_searched_list(prms)
         posts_save_paths = [p for p in posts_save_paths if p]
-        start_time = time.time()
-        image_list_df = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
-        elapsed = time.time() - start_time
-        print(f'## Batch download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
-        create_tag_count(prms)
-        start_time = time.time()
-        resize_imgs_batch(num_cpu,
-                          image_list_df["directory"].to_list(),
-                          image_list_df["filename"].to_list(),
-                          image_list_df["resized_img_folder"].to_list(),
-                          image_list_df["min_short_side"].to_list(),
-                          image_list_df["img_ext"].to_list(),
-                          image_list_df["delete_original"].to_list(),
-                          image_list_df["tagfilebasename"].to_list(),
-                          image_list_df["method_tag_files"].to_list())
-        elapsed = time.time() - start_time
-        print(f'## Batch resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
+        if posts_save_paths:
+            start_time = time.time()
+            image_list_df = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
+            elapsed = time.time() - start_time
+            print(f'## Batch download elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
+            create_tag_count(prms)
+            if image_list_df.shape[0] > 0:
+                start_time = time.time()
+                resize_imgs_batch(num_cpu,
+                                  image_list_df["directory"].to_list(),
+                                  image_list_df["filename"].to_list(),
+                                  image_list_df["resized_img_folder"].to_list(),
+                                  image_list_df["min_short_side"].to_list(),
+                                  image_list_df["img_ext"].to_list(),
+                                  image_list_df["delete_original"].to_list(),
+                                  image_list_df["tagfilebasename"].to_list(),
+                                  image_list_df["method_tag_files"].to_list())
+                elapsed = time.time() - start_time
+                print(f'## Batch resize elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
 
     if failed_images:
         print(f'## Failed to resize {len(failed_images)} images')
