@@ -190,6 +190,7 @@ alternate_costume
 alternate_version_at_source
 ambiguous_species
 anonymous_artist
+anonymous_character
 archived_source
 avian_humanoid
 avoid_posting
