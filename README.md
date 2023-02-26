@@ -79,7 +79,7 @@ I recommend **not** passing it if you have adequate storage space and memory.
 Posts/Tags parquets will be checked first then, when not found, will be created using posts/tags CSVs. <br />
 Posts/Tags CSVs when not found, will be created using posts/tags CSV.gz's. <br />
 Posts/Tags CSV.gz's when not found, will be downloaded. <br />
-You may delete the CSVs and CSV.gz's when you already have the parquet files.
+Posts/Tags CSVs and CSV.gz's are automatically deleted once the Posts/Tags parquet files are created. Pass the `--keep` to not delete them.
 
 The downloader automatically downloads the latest e621 posts/tags db when you don't have them saved. Pass the `--postsparquet` and `--tagsparquet` arguments along with the paths to the saved posts/tags parquet files to disable it from downloading the updated ones.
 
