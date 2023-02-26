@@ -607,6 +607,7 @@ def run_download(file, length, dwn_log_path, err_log_path):
     else:
         with open(dwn_log_path, 'w', encoding="utf-8") as f:
             f.write(out_log)
+
     os.remove(file)
     return failed_md5
 
@@ -698,23 +699,24 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     
     if failed_md5:
         print(f'## Retrying download for {len(failed_md5)} failed post downloads')
-        _file = base_folder + '/__retry.txt'
+        _file = base_folder + '/___.txt'
         df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['download_links','cmd_directory','cmd_filename']).write_csv(_file, sep='\n', has_header=False)
         failed_set_part_2 = run_download(_file, len(failed_md5), base_folder + '/redownload_log.txt', base_folder + '/redownload_error_log.txt')
         failed_md5 = failed_md5 & failed_set_part_2
-    
+
     validate_redownload = set()
+    found_md5 = set()
     replace_from_img_list = []
     remove_from_img_list = []
     tagfiles_no_post = set()
     ids_no_post = set()
-      
+    
     if failed_md5:
         print(f'## Attempting to redownload {len(failed_md5)} unavailable posts using alternative source(s)')
         md5_and_source = _md5_source.filter(pl.col('md5').str.contains('|'.join(failed_md5)))
         num_redownload = 0
         __file = ''
-        for source, directory, filename_from_type, filename, _id in zip(md5_and_source["source"].to_list(), md5_and_source["directory"].to_list(), md5_and_source["filename_no_ext"].to_list(), md5_and_source["filename"].to_list(), md5_and_source["id"].to_list()):
+        for source, directory, filename_from_type, filename, _id, md5 in zip(md5_and_source["source"].to_list(), md5_and_source["directory"].to_list(), md5_and_source["filename_no_ext"].to_list(), md5_and_source["filename"].to_list(), md5_and_source["id"].to_list(), md5_and_source["md5"].to_list()):
             links = source.split('\n')
             ext_links = {'.png':[],'.jpg':[],'.gif':[],'.webm':[],'.swf':[]}
             found_one = False
@@ -735,38 +737,45 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                         if _fline == '':
                             _fline = '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
                         else:
-                            _fline += '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
+                            _fline += '\n' + '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
                         validate_redownload.add((directory, filename_from_type, ext, _id))
+                        found_md5.add(md5)
                 if __file == '':
                     __file = _fline
                 else:
                     __file += '\n' + _fline
         
-        with open(base_folder + '/__.txt', 'w', encoding="utf-8") as f:
-            f.write(__file)
-        
         if num_redownload > 0:
             print(f'## Found {num_redownload} direct file links for redownloading.')
+            with open(base_folder + '/____.txt', 'w', encoding="utf-8") as f:
+                f.write(__file)
             if not batch_mode:
-                run_download(base_folder + '/__.txt', num_redownload, prms["batch_folder"][batch_num] + f'/redownload_log_b_{batch_num}.txt', prms["batch_folder"][batch_num] + f'/redownload_error_log_b_{batch_num}.txt')
+                failed_set_part_3 = run_download(base_folder + '/____.txt', num_redownload, prms["batch_folder"][batch_num] + f'/redownload_log_b_{batch_num}.txt', prms["batch_folder"][batch_num] + f'/redownload_error_log_b_{batch_num}.txt')
             else:
-                run_download(base_folder + '/__.txt', num_redownload, base_folder + '/redownload_log_b.txt', base_folder + '/redownload_error_log_b.txt')
+                failed_set_part_3 = run_download(base_folder + '/____.txt', num_redownload, base_folder + '/redownload_log_b.txt', base_folder + '/redownload_error_log_b.txt')
+            failed_md5 = (failed_md5 - found_md5) | failed_set_part_3
         else:
             print('## Found 0 direct file links for redownloading.')
         
         validated = {}
+        if not batch_mode:
+            duplicates_folder = prms["batch_folder"][batch_nums[0]] + '/duplicate_posts/'
+        else:
+            duplicates_folder = base_folder + '/duplicate_posts/'
+        os.makedirs(duplicates_folder, exist_ok=True)
         for directory, filename_from_type, ext, _id in validate_redownload:
             if os.path.isfile(directory + filename_from_type + ext):
                 if directory + filename_from_type not in validated:
                     validated[directory + filename_from_type] = ext
-                    replace_from_img_list.append((directory, filename_from_type, ext))
+                    replace_from_img_list.append((directory, filename_from_type, filename_from_type + ext))
                 else:
                     if validated[directory + filename_from_type] != ext:
-                        os.remove(directory + filename_from_type + ext)
-            else:
-                remove_from_img_list.append((directory,filename_from_type + ext))
-                tagfiles_no_post.add(filename_from_type + '.txt')
-                ids_no_post.add(_id)
+                        os.replace(directory + filename_from_type + ext, duplicates_folder + filename_from_type + ext)
+        for directory, filename_from_type, ext, _id in validate_redownload:
+                if not os.path.isfile(directory + filename_from_type + ext) and (directory + filename_from_type not in validated):
+                    remove_from_img_list.append((directory,filename_from_type + ext))
+                    tagfiles_no_post.add(filename_from_type + '.txt')
+                    ids_no_post.add(_id)
         
         if tagfiles_no_post:
             if not batch_mode:
@@ -778,23 +787,19 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             os.makedirs(tagfiles_no_post_folder, exist_ok=True)
             os.makedirs(ids_no_post_folder, exist_ok=True)
         
-        if not prms["skip_resize"][batch_num] and (replace_from_img_list or remove_from_img_list):
-            img_list_length = _img_lists_df.shape[0]
-            rows_to_remove = [0]*img_list_length
-            for idx, img_directory, img_filename_no_ext, img_filename in zip(range(img_list_length),_img_lists_df['directory'].to_list(),_img_lists_df['filename_no_ext'].to_list(),_img_lists_df['filename'].to_list()):
-                for directory, filename_no_ext, ext in reversed(replace_from_img_list):
-                    if (img_directory == directory) and (img_filename_no_ext == filename_no_ext):
-                        if img_filename != filename_no_ext + ext:
-                            _img_lists_df = _img_lists_df.with_columns(_img_lists_df['filename'].set_at_idx(idx, filename_no_ext + ext))
-                            replace_from_img_list = replace_from_img_list[:-1]
-                            break
-                for directory, filename in reversed(remove_from_img_list):
-                    if (img_directory == directory) and (img_filename == filename):
-                        rows_to_remove[idx] = None
-                        remove_from_img_list = remove_from_img_list[:-1]
-                        break
-            _img_lists_df = _img_lists_df.with_columns(pl.Series(rows_to_remove).alias('to_remove')).drop_nulls().drop('to_remove')
-            
+        if not prms["skip_resize"][batch_num] and replace_from_img_list:
+            _img_lists_df = _img_lists_df.join(
+                               pl.DataFrame(replace_from_img_list, schema=['directory','filename_no_ext','new_filename']), 
+                               on=['directory','filename_no_ext'], 
+                               how="left"
+                            ).with_columns(pl.col('new_filename').fill_null(pl.col('filename'))).drop(['filename']).rename({'new_filename':'filename'})
+        if not prms["skip_resize"][batch_num] and remove_from_img_list:
+            _img_lists_df = _img_lists_df.join(
+                               pl.DataFrame(remove_from_img_list, schema=['directory','filename'], orient='row'), 
+                               on=['directory','filename'], 
+                               how="anti"
+                            )
+        
         _failed_df = df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['id','md5','source'])
 
         with open(ids_no_post_folder + 'failed_download_posts_alt_source_list.txt', 'w', encoding="utf-8") as f:
@@ -991,7 +996,7 @@ def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, min_s
         if resized_img_folder != imgs_folder: # different folder
             cv2.imwrite(resized_filename, image)
         else: # same folder -> rename original image
-            os.rename(imgs_folder + img_file, imgs_folder + '_' + img_file)
+            os.replace(imgs_folder + img_file, imgs_folder + '_' + img_file)
             cv2.imwrite(resized_filename, image)
     increment(counter, counter_lock, num_images)
 
@@ -1016,7 +1021,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
         if (not delete_original) and (resized_img_folder != img_folder):
             if method == 'relocate':
                 print(f'\r## Relocating tag files {i}/{length}',end='')
-                os.rename(img_folder + tag_file, resized_img_folder + tag_file)
+                os.replace(img_folder + tag_file, resized_img_folder + tag_file)
             else: # copy
                 print(f'\r## Copying tag files {i}/{length}',end='')
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
@@ -1037,7 +1042,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
         if (not delete) and (res_fol != img_fol):
             if method == 'relocate':
                 print(f'\r## Relocating tag files {i}/{length}',end='')
-                os.rename(img_fol + tag_file, res_fol + tag_file)
+                os.replace(img_fol + tag_file, res_fol + tag_file)
             else:
                 print(f'\r## Copying tag files {i}/{length}',end='')
                 shutil.copyfile(img_fol + tag_file, res_fol + tag_file)
