@@ -88,25 +88,25 @@ The downloader automatically downloads the latest e621 posts/tags db when you do
 | Parameter | type | Options | Description | Relative Parent folder |
 |:--- |:---:|:---:|:--- |:---:|
 | batch_folder | str | *any directory path* | Output directory for each batch | basefolder |
-| required_tags | str | *any e621 tag* | Separate tags with `,`<br />Combine multiple tag groups with <code>&#124;</code><br />Example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />Search for posts that starts/ends with a certain word by adding `*` after/before the word<br />Example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
+| required_tags | str | *any e621 tag* | Separate tags with `,`<br />Combine multiple tag groups with <code>&#124;</code><br />Example: get posts that are tagged either `anthro, wolf` or `feral, 4_toes` (or both):<br /><code>anthro, wolf &#124; feral, 4_toes</code><br />Search for posts with tags that start/end with a certain word by adding `*` after/before the word<br />Example: `detailed*` includes tags such as `detailed`, `detailed_background`, `detailed_fur`, etc. |  |
 | blacklist | str | *any e621 tag* | Uses the same format as `required_tags`. Blacklist tag groups found as a subset in any tag group in `required_tags` are ignored. Example: `female` and `anthro, female` are subsets of `female, anthro` but `female, anthro, male` and `female, male` are not. Note that ignoring is based on the literal search query, e.g., `detailed*` is not a subset of `detailed_background` nor `detailed`. |  |
 | include_png<br />include_jpg<br />include_gif<br />include_webm<br />include_swf | bool | `true`, `false` | Setting to `false` will not include posts with that file type. At least one should be `true`. |  |
 | include_explicit<br />include_questionable<br />include_safe | bool | `true`, `false` | Setting to `false` will not include posts with that post rating. At least one should be `true`. |  |
 | min_score | int |  | Collect posts with a minimum specified score |  |
 | min_fav_count | int |  | Collect posts with a minimum specified favorite count |  |
 | min_date | str |  | Collect posts starting from specified date. Use date format `YYYY-mm-dd` or `YYYY-mm` or `YYYY`. Use zero padding. |  |
-| min_area | int |  | Collect posts with a minimum specified image dimension area. e.g., 512x512 = 262144. swf type posts are ignored. Set to `-1` to include any dimension areas |  |
-| skip_posts_file | str | *any file path* | Path to a txt file containing a list of id/md5 of posts to skip (one post per line). Set to empty string to disable | basefolder |
+| min_area | int |  | Collect posts with a minimum specified image dimension area. e.g., 512x512 = 262144. swf type posts are ignored. Set to `-1` to include any dimension areas. |  |
+| skip_posts_file | str | *any file path* | Path to a txt file containing a list of id/md5 of posts to skip (one post per line). Set to empty string to disable. | basefolder |
 | skip_posts_type | str | `"id"`, `"md5"` | Whether the content of `skip_posts_file` are id or md5 values |  |
 | do_sort | bool | `true`, `false` | Sort posts by score in descending order. Posts are sorted by id (or date) in ascending order by default.  |  |
-| top_n | int |  | Collect top n posts according to sort. If n > number of filtered posts, save all. Set to `-1` to save all  |  |
+| top_n | int |  | Collect top n posts according to sort. If n > number of filtered posts, save all. Set to `-1` to save all.  |  |
 | save_searched_list_type | str | `"id"`, `"md5"`, `"None"` | Save a list of searched ids / md5s. Great for keeping track of what you've already searched for. Set to `"None"` to disable. |  |
 | save_searched_list_path | str | *any file path* | File path/filename of list of searched ids / md5s. Default filenames: `list_of_searched_id.txt` / `list_of_searched_md5.txt` | batch_folder |
 | downloaded_posts_folder | str | *any directory path* | Folder path for downloaded posts of any file type | batch_folder |
 | png_folder<br />jpg_folder<br />gif_folder<br />webm_folder<br />swf_folder | str | *any directory path*  | Folder path for downloaded posts of that specific file type. Setting to empty string will default to `downloaded_posts_folder`. | downloaded_posts_folder |
 | save_filename_type | str | `"id"`, `"md5"` | Downloaded posts filename type |  |
-| include_tag_file | bool | `true`, `false` | Download posts along with their tags saved in .txt files. Tag files use `save_filename_type` as the filename but with a .txt extension |  |
 | skip_post_download | bool | `true`, `false` | Set to `true` to not download collected posts. Good for when you only need to save tag files. |  |
+| include_tag_file | bool | `true`, `false` | Download posts along with their tags saved in .txt files. Tag files use `save_filename_type` as the filename but with a .txt extension. |  |
 | tag_sep | str |  | Separator used for separating tags in the tag file. `", "` is recommended.  |  |
 | include_explicit_tag<br />include_questionable_tag<br />include_safe_tag | bool | `true`, `false` | Prepend post rating to tag list using the following tags representing `e`, `q`, `s`, respectively: `explicit`, `questionable`,`safe` |  |
 | reorder_tags | bool | `true`, `false` | If `true`, rearrange tags into their respective categories specified in `tag_order_format` |  |
