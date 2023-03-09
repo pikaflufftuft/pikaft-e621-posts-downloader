@@ -329,8 +329,8 @@ def check_tag_query(prms, e621_tags_set):
 
 def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename='', keep_db=False):
     
-    db_export_file_path = base_folder + '/db_export.html'
-    subprocess.check_output(f'curl https://e621.net/db_export/ -o {db_export_file_path}', shell=True)
+    db_export_file_path = os.path.join(base_folder, 'db_export.html')
+    subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
     with open(db_export_file_path) as f:
         gfg = BeautifulSoup(''.join(f.readlines()), features='html.parser')
     gfg_lines = gfg.get_text().split('\n')
@@ -347,10 +347,10 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
     if not os.path.isfile(e621_posts_list_filename):
 
         if posts_csv == '':
-            posts_csv = f'{base_folder}/{posts_filename[:-3]}'
+            posts_csv = os.path.join(base_folder, posts_filename[:-3])
         if not os.path.isfile(posts_csv):
             posts_link = 'https://e621.net/db_export/' + posts_filename
-            posts_file_path = f'{base_folder}/{posts_filename}'
+            posts_file_path = os.path.join(base_folder, posts_filename)
             print(posts_file_path)
             if not os.path.isfile(posts_file_path):
                 with requests.get(posts_link, stream=True) as r:
@@ -578,7 +578,7 @@ def create_searched_list(prms):
 
 def run_download(file, length, dwn_log_path, err_log_path):
     failed_md5 = set()
-    cmd = ['aria2c','-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',file]
+    cmd = [aria2c_path,'-c','-x','16','-k','1M','-j',str(multiprocessing.cpu_count()),'-i',file]
     popen = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     out_log = ''
     ctr = 0
@@ -1049,7 +1049,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
     print('')
 
 def main():
-    global failed_images, counter, counter_lock, processed_tag_files
+    global failed_images, counter, counter_lock, processed_tag_files, aria2c_path
     print('##################### e621 posts downloader #####################')
     parser = argparse.ArgumentParser(description='e621 posts downloader')
     parser.add_argument('-f', '--basefolder', action='store', type=str, help='default output directory used for storing e621 db files and downloading posts', default='')
@@ -1061,6 +1061,7 @@ def main():
     parser.add_argument('-ppar', '--postsparquet', action='store', type=str, help='path to e621 posts parquet', default='')
     parser.add_argument('-tpar', '--tagsparquet', action='store', type=str, help='path to e621 tags parquet', default='')
     parser.add_argument('-k', '--keepdb', action='store_true', help="pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files")
+    parser.add_argument('-ap', '--aria2cpath', action='store', help="locate where aria2c is", default='')
     args = parser.parse_args()
 
     base_folder = os.path.dirname(os.path.abspath(__file__))
@@ -1071,9 +1072,15 @@ def main():
 
     with open(args.settings, 'r') as json_file:
         prms = json.load(json_file)
-
-    if shutil.which('aria2c') is None:
-        raise RuntimeError('aria2c is not installed. Install https://github.com/aria2/aria2/releases/')
+    
+    if args.aria2cpath != '':
+        if not os.path.exists(args.aria2cpath):
+            raise RuntimeError('aria2c not found at the path provided. Install https://github.com/aria2/aria2/releases/')
+        aria2c_path = args.aria2cpath
+    else:
+        if shutil.which('aria2c') is None:
+            raise RuntimeError('aria2c is not installed. Install https://github.com/aria2/aria2/releases/')
+        aria2c_path = "aria2c"
     
     if args.postscsv != '':
         if not args.postscsv.endswith('.csv'):
