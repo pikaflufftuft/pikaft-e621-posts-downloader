@@ -3,7 +3,6 @@
 import os
 import json
 import argparse
-from bs4 import BeautifulSoup
 import requests
 from tqdm.auto import tqdm
 import shutil
@@ -150,12 +149,15 @@ def prep_params(prms, batch_count, base_folder):
     
     check_valid_param(prms["downloaded_posts_folder"], 'downloaded_posts_folder', None, str)
     for i in range(batch_count):
-        prms["downloaded_posts_folder"][i] = prms["downloaded_posts_folder"][i].strip('/') + '/'
-        if os.path.isabs(prms["downloaded_posts_folder"][i]):                
-            os.makedirs(prms["downloaded_posts_folder"][i], exist_ok=True)
+        if prms["downloaded_posts_folder"][i] == '':
+            prms["downloaded_posts_folder"][i] = prms["batch_folder"][i]
         else:
-            prms["downloaded_posts_folder"][i] = prms["batch_folder"][i] + '/' + prms["downloaded_posts_folder"][i]
-            os.makedirs(prms["downloaded_posts_folder"][i], exist_ok=True)
+            prms["downloaded_posts_folder"][i] = prms["downloaded_posts_folder"][i].strip('/') + '/'
+            if os.path.isabs(prms["downloaded_posts_folder"][i]):                
+                os.makedirs(prms["downloaded_posts_folder"][i], exist_ok=True)
+            else:
+                prms["downloaded_posts_folder"][i] = prms["batch_folder"][i] + '/' + prms["downloaded_posts_folder"][i]
+                os.makedirs(prms["downloaded_posts_folder"][i], exist_ok=True)
 
     for filetype_folder in ('png_folder', 'jpg_folder', 'gif_folder', 'webm_folder', 'swf_folder'):
         check_valid_param(prms[filetype_folder], filetype_folder, None, str)
@@ -332,16 +334,24 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
     db_export_file_path = os.path.join(base_folder, 'db_export.html')
     subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
     with open(db_export_file_path) as f:
-        gfg = BeautifulSoup(''.join(f.readlines()), features='html.parser')
-    gfg_lines = gfg.get_text().split('\n')
-    found_first = None
-    for line in gfg_lines:
-        if 'posts' in line:
-            found_first = True
-            posts_filename = line.split(' ')[0]
-        elif found_first:
-            break    
+        contents = f.read()
     
+        pattern =  r"posts\S*?\.gz"
+        matches = []
+        for line in contents.split("\n"):
+            match = re.search(pattern, line)
+            if match:
+                matches.append(match.group())
+        posts_filename = matches[-1]
+
+        pattern =  r"tags\S*?\.gz"
+        matches = []
+        for line in contents.split("\n"):
+            match = re.search(pattern, line)
+            if match:
+                matches.append(match.group())
+        tags_filename = matches[-1]
+
     if e621_posts_list_filename == '':
         e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
     if not os.path.isfile(e621_posts_list_filename):
@@ -371,13 +381,6 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
         if not keep_db:
             os.remove(posts_csv)
         
-    found_first = None
-    for line in gfg_lines:
-        if 'tags' in line:
-            found_first = True
-            tags_filename = line.split(' ')[0]
-        elif found_first:
-            break
     
     if e621_tags_list_filename == '':
         e621_tags_list_filename = f'{base_folder}/{tags_filename[:-7]}.parquet'
@@ -464,9 +467,10 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     print(f'## Removing posts with score < {prms["min_score"][batch_num]}')
     df = df.filter(pl.col('score') >= prms["min_score"][batch_num])
     
-    print(f'## Removing posts with favorite count < {prms["min_fav_count"][batch_num]}')
-    df = df.filter(pl.col('fav_count') >= prms["min_fav_count"][batch_num])
-    df = df.drop(columns=['fav_count'])
+    if prms["min_fav_count"][batch_num] > 0:
+        print(f'## Removing posts with favorite count < {prms["min_fav_count"][batch_num]}')
+        df = df.filter(pl.col('fav_count') >= prms["min_fav_count"][batch_num])
+        df = df.drop(columns=['fav_count'])
     
     included_file_ext = set(['png'*prms["include_png"][batch_num], 'jpg'*prms["include_jpg"][batch_num], 'gif'*prms["include_gif"][batch_num], 'webm'*prms["include_webm"][batch_num], 'swf'*prms["include_swf"][batch_num]])
     if '' in included_file_ext:
@@ -709,14 +713,13 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     replace_from_img_list = []
     remove_from_img_list = []
     tagfiles_no_post = set()
-    ids_no_post = set()
     
     if failed_md5:
         print(f'## Attempting to redownload {len(failed_md5)} unavailable posts using alternative source(s)')
         md5_and_source = _md5_source.filter(pl.col('md5').str.contains('|'.join(failed_md5)))
         num_redownload = 0
         __file = ''
-        for source, directory, filename_from_type, filename, _id, md5 in zip(md5_and_source["source"].to_list(), md5_and_source["directory"].to_list(), md5_and_source["filename_no_ext"].to_list(), md5_and_source["filename"].to_list(), md5_and_source["id"].to_list(), md5_and_source["md5"].to_list()):
+        for source, directory, filename_from_type, filename, md5 in zip(md5_and_source["source"].to_list(), md5_and_source["directory"].to_list(), md5_and_source["filename_no_ext"].to_list(), md5_and_source["filename"].to_list(), md5_and_source["md5"].to_list()):
             links = source.split('\n')
             ext_links = {'.png':[],'.jpg':[],'.gif':[],'.webm':[],'.swf':[]}
             found_one = False
@@ -728,7 +731,6 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             if not found_one:
                 remove_from_img_list.append((directory,filename))
                 tagfiles_no_post.add(filename_from_type + '.txt')
-                ids_no_post.add(_id)
             else:
                 num_redownload += 1
                 _fline = ''
@@ -738,7 +740,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                             _fline = '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
                         else:
                             _fline += '\n' + '\t'.join(links) + f'\n  dir={directory}' + f'\n  out={filename_from_type}{ext}'
-                        validate_redownload.add((directory, filename_from_type, ext, _id))
+                        validate_redownload.add((directory, filename_from_type, ext))
                         found_md5.add(md5)
                 if __file == '':
                     __file = _fline
@@ -763,7 +765,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         else:
             duplicates_folder = base_folder + '/duplicate_posts/'
         os.makedirs(duplicates_folder, exist_ok=True)
-        for directory, filename_from_type, ext, _id in validate_redownload:
+        for directory, filename_from_type, ext in validate_redownload:
             if os.path.isfile(directory + filename_from_type + ext):
                 if directory + filename_from_type not in validated:
                     validated[directory + filename_from_type] = ext
@@ -771,11 +773,10 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 else:
                     if validated[directory + filename_from_type] != ext:
                         os.replace(directory + filename_from_type + ext, duplicates_folder + filename_from_type + ext)
-        for directory, filename_from_type, ext, _id in validate_redownload:
-                if not os.path.isfile(directory + filename_from_type + ext) and (directory + filename_from_type not in validated):
-                    remove_from_img_list.append((directory,filename_from_type + ext))
-                    tagfiles_no_post.add(filename_from_type + '.txt')
-                    ids_no_post.add(_id)
+        for directory, filename_from_type, ext in validate_redownload:
+            if not os.path.isfile(directory + filename_from_type + ext) and (directory + filename_from_type not in validated):
+                remove_from_img_list.append((directory,filename_from_type + ext))
+                tagfiles_no_post.add(filename_from_type + '.txt')
         
         if tagfiles_no_post:
             if not batch_mode:
@@ -1061,7 +1062,7 @@ def main():
     parser.add_argument('-ppar', '--postsparquet', action='store', type=str, help='path to e621 posts parquet', default='')
     parser.add_argument('-tpar', '--tagsparquet', action='store', type=str, help='path to e621 tags parquet', default='')
     parser.add_argument('-k', '--keepdb', action='store_true', help="pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files")
-    parser.add_argument('-ap', '--aria2cpath', action='store', help="locate where aria2c is", default='')
+    parser.add_argument('-ap', '--aria2cpath', action='store', help="path to aria2c program", default='')
     args = parser.parse_args()
 
     base_folder = os.path.dirname(os.path.abspath(__file__))
@@ -1072,10 +1073,10 @@ def main():
 
     with open(args.settings, 'r') as json_file:
         prms = json.load(json_file)
-    
+
     if args.aria2cpath != '':
-        if not os.path.exists(args.aria2cpath):
-            raise RuntimeError('aria2c not found at the path provided. Install https://github.com/aria2/aria2/releases/')
+        if not os.path.isfile(args.aria2cpath):
+            raise RuntimeError(f'aria2c was not found at {args.aria2cpath}. Install https://github.com/aria2/aria2/releases/')
         aria2c_path = args.aria2cpath
     else:
         if shutil.which('aria2c') is None:
