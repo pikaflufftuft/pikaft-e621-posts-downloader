@@ -4,7 +4,7 @@
  
  [![](https://img.shields.io/static/v1?message=Open%20in%20Colab&logo=googlecolab&labelColor=5c5c5c&color=0f80c1&label=%20&style=for-the-badge)](coming_soon) (coming soon!)
 
-##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber
+##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
 ## Features
 
@@ -63,6 +63,7 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 | `-ppar` | `--postsparquet` | path to e621 posts parquet |  |
 | `-tpar` | `--tagsparquet` | path to e621 tags parquet |  |
 | `-k` | `--keepdb` | pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files | *not passed* |
+| `-ap` | `--aria2cpath` | path to aria2c program |  |
 
 Examples:
 
