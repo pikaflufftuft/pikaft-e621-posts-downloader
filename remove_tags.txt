@@ -189,6 +189,7 @@ alolan_form
 alternate_costume
 alternate_version_at_source
 ambiguous_species
+animal_humanoid
 anonymous_artist
 anonymous_character
 archived_source
@@ -267,10 +268,12 @@ inner_monologue
 insect_humanoid
 joke
 legendary_pokemon
+living_vehicle
 lol_comments
 low_res
 lowres
 mammal
+mammal_humanoid
 mega_evolution
 meme
 md5_mismatch
@@ -328,6 +331,7 @@ ultra_beast
 unavailable_at_source
 unknown_artist
 unknown_character
+unknown_species
 unprofessional_behavior
 upscale
 video_games
