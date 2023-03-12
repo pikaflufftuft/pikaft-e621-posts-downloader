@@ -1,7 +1,7 @@
 {
 "batch_folder": "batch0",
 "required_tags": "",
-"blacklist": "animated | comic | e621 | alpha_channel | young | image_macro | humor | reaction_image | blursed_image | what_has_science_done | what | nightmare_fuel | where_is_your_god_now | why | grandfathered_content | low_res",
+"blacklist": "animated | comic | e621 | alpha_channel | young | model_sheet | image_macro | humor | reaction_image | blursed_image | what_has_science_done | what | nightmare_fuel | where_is_your_god_now | why | grandfathered_content | low_res",
 "include_png": true,
 "include_jpg": true,
 "include_gif": false,
