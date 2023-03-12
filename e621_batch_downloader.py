@@ -430,8 +430,11 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
 def collect_posts(prms, batch_num, e621_posts_list_filename):
     
     print(f"## Collecting posts for batch {batch_num}")
-    df = pl.read_parquet(e621_posts_list_filename)
-            
+    if cached_e621_posts is None:
+        df = pl.read_parquet(e621_posts_list_filename)
+    else:
+        df = cached_e621_posts
+    
     if prms["collect_from_listed_posts_file"][batch_num]:
         print(f'## Collecting listed posts in {prms["collect_from_listed_posts_file"][batch_num]}')
         with open(prms["collect_from_listed_posts_file"][batch_num], 'r') as f:
@@ -1050,7 +1053,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
     print('')
 
 def main():
-    global failed_images, counter, counter_lock, processed_tag_files, aria2c_path
+    global failed_images, counter, counter_lock, processed_tag_files, aria2c_path, cached_e621_posts
     print('##################### e621 posts downloader #####################')
     parser = argparse.ArgumentParser(description='e621 posts downloader')
     parser.add_argument('-f', '--basefolder', action='store', type=str, help='default output directory used for storing e621 db files and downloading posts', default='')
@@ -1063,6 +1066,7 @@ def main():
     parser.add_argument('-tpar', '--tagsparquet', action='store', type=str, help='path to e621 tags parquet', default='')
     parser.add_argument('-k', '--keepdb', action='store_true', help="pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files")
     parser.add_argument('-ap', '--aria2cpath', action='store', help="path to aria2c program", default='')
+    parser.add_argument('-ch', '--cachepostsdb', action='store_true', help="cache e621 posts file when working with multiple batches")
     args = parser.parse_args()
 
     base_folder = os.path.dirname(os.path.abspath(__file__))
@@ -1073,7 +1077,7 @@ def main():
 
     with open(args.settings, 'r') as json_file:
         prms = json.load(json_file)
-
+        
     if args.aria2cpath != '':
         if not os.path.isfile(args.aria2cpath):
             raise RuntimeError(f'aria2c was not found at {args.aria2cpath}. Install https://github.com/aria2/aria2/releases/')
@@ -1118,6 +1122,10 @@ def main():
     
     print('## Checking required files')
     e621_posts_list_filename, tag_to_cat, e621_tags_set = get_db(base_folder, args.postscsv, args.tagscsv, args.postsparquet, args.tagsparquet, args.keepdb)
+    
+    cached_e621_posts = None
+    if args.cachepostsdb:
+        cached_e621_posts = pl.read_parquet(e621_posts_list_filename)
     
     print('## Checking tag search query')
     check_tag_query(prms, e621_tags_set)
@@ -1180,6 +1188,8 @@ def main():
     elapsed = time.time() - session_start_time
     print(f'## Total session elapsed time: {elapsed//60:02.0f}:{elapsed % 60:02.0f}.{f"{elapsed % 1:.2f}"[2:]}')
     print('#################################################################')
+    
+    del cached_e621_posts
     
 if __name__ == "__main__":
     main()
