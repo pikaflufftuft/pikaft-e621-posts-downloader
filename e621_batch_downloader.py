@@ -470,7 +470,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     print(f'## Removing posts with score < {prms["min_score"][batch_num]}')
     df = df.filter(pl.col('score') >= prms["min_score"][batch_num])
     
-    if prms["min_fav_count"][batch_num] > 0:
+    if prms["min_fav_count"][batch_num] > 0 and 'fav_count' in df.columns:
         print(f'## Removing posts with favorite count < {prms["min_fav_count"][batch_num]}')
         df = df.filter(pl.col('fav_count') >= prms["min_fav_count"][batch_num])
         df = df.drop(columns=['fav_count'])
@@ -482,7 +482,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     if included_file_ext:
         df = df.filter(pl.col('file_ext').str.contains(included_file_ext))
     
-    if prms["min_date"][batch_num] >= '2007':
+    if prms["min_date"][batch_num] >= '2007' and 'created_at' in df.columns:
         print(f'## Removing posts before date {prms["min_date"][batch_num]}')
         df = df.filter(pl.col("created_at") >= prms["min_date"][batch_num])
         df = df.drop(columns=['created_at'])
@@ -493,7 +493,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
             skip_posts = list(set([s.strip() for s in f]))
         df = df.filter(~pl.col(prms["skip_posts_type"][batch_num]).is_in(skip_posts))
     
-    if prms["min_area"][batch_num] >= 65536:
+    if prms["min_area"][batch_num] >= 65536 and 'image_width' in df.columns and 'image_height' in df.columns:
         print(f'## Removing posts with dimension area less than {prms["min_area"][batch_num]}px')
         df = df.filter(pl.col("image_width") * pl.col("image_height") >= prms["min_area"][batch_num])
         df = df.drop(columns=['image_width','image_height'])
@@ -921,7 +921,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                                 all_tag_count[tag] = 1
             print('')
 
-    if not prms["skip_resize"][batch_num]:
+    if not prms["skip_resize"][batch_num] and 'directory' in _img_lists_df.columns:
         _img_lists_df = _img_lists_df.unique(subset=['directory','filename_no_ext'])
     return _img_lists_df
 
