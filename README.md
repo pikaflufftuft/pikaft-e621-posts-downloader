@@ -64,6 +64,7 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 | `-tpar` | `--tagsparquet` | path to e621 tags parquet |  |
 | `-k` | `--keepdb` | pass this argument to keep the db .csv and .csv.gz files after acquiring the parquet files | *not passed* |
 | `-ap` | `--aria2cpath` | path to aria2c program |  |
+| `-ch` | `--cachepostsdb` | cache e621 posts file when working with multiple batches |  |
 
 Examples:
 
