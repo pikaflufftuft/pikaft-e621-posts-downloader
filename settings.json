@@ -14,8 +14,6 @@
 "min_fav_count": 0,
 "min_date": "2013",
 "min_area": 262144,
-"do_sort": true,
-"top_n": 100,
 "collect_from_listed_posts_file": "",
 "collect_from_listed_posts_type": "id",
 "apply_filter_to_listed_posts": false,
