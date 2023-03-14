@@ -98,6 +98,9 @@ The downloader automatically downloads the latest e621 posts/tags db when you do
 | min_fav_count | int |  | Collect posts with a minimum specified favorite count |  |
 | min_date | str |  | Collect posts starting from specified date. Use date format `YYYY-mm-dd` or `YYYY-mm` or `YYYY`. Use zero padding. |  |
 | min_area | int |  | Collect posts with a minimum specified image dimension area. e.g., 512x512 = 262144. swf type posts are ignored. Set to `-1` to include any dimension areas. |  |
+| collect_from_listed_posts_file | str | *any file path* | Path to a txt file containing a list of id/md5 of posts to collect (one post per line). Set to empty string to disable. | basefolder |
+| collect_from_listed_posts_type | str | `"id"`, `"md5"` | Whether the content of `collect_from_listed_posts_file` are id or md5 values |  |
+| apply_filter_to_listed_posts | bool | `true`, `false` | Whether to apply the filters (e.g., `required_tags`, `min_score`) on the list of posts to collect. Setting to `false` will collect all the listed posts that are available.  |  |
 | skip_posts_file | str | *any file path* | Path to a txt file containing a list of id/md5 of posts to skip (one post per line). Set to empty string to disable. | basefolder |
 | skip_posts_type | str | `"id"`, `"md5"` | Whether the content of `skip_posts_file` are id or md5 values |  |
 | do_sort | bool | `true`, `false` | Sort posts by score in descending order. Posts are sorted by id (or date) in ascending order by default.  |  |
