@@ -366,8 +366,8 @@ with gr.Blocks() as demo:
             postsparquet = gr.Textbox(lines=1, label='Path to e6 posts parquet', value="")
             tagsparquet = gr.Textbox(lines=1, label='Path to e6 tags parquet', value="")
             aria2cpath = gr.Textbox(lines=1, label='Path to aria2c program', value="")
-    with gr.Row():
-        run_button = gr.Button(value="Run", variant='primary')
+        with gr.Row():
+            run_button = gr.Button(value="Run", variant='primary')
     '''
     ##################################################################################################################################
     ####################################################     EVENT HANDLER/S     #####################################################
