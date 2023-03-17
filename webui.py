@@ -70,6 +70,11 @@ def execute(cmd):
     if return_code:
         raise sub.CalledProcessError(return_code, cmd)
 
+def get_list(arb_string, delimeter):
+    return arb_string.split(delimeter)
+
+def get_string(arb_list, delimeter):
+    return delimeter.join(arb_list)
 
 '''
 ##################################################################################################################################
@@ -95,6 +100,17 @@ resize_checkboxes = ["skip_resize", "delete_original"]
 config_name = "settings.json"
 global settings_json
 settings_json = load_session_config(os.path.join(cwd, config_name))
+global required_tags_list
+required_tags_list = get_list(settings_json["required_tags"], settings_json["tag_sep"])
+for tag in required_tags_list:
+    if len(tag) == 0:
+        required_tags_list.remove(tag)
+
+global blacklist_tags
+blacklist_tags = get_list(settings_json["blacklist"], " | ")
+for tag in blacklist_tags:
+    if len(tag) == 0:
+        blacklist_tags.remove(tag)
 
 verbose_print(f"{settings_json}")
 verbose_print(f"json key count: {len(settings_json)}")
@@ -127,7 +143,7 @@ update_JSON(settings_json, config_name)
 
 def config_save_button(batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,img_ext,
                               method_tag_files,min_score,min_fav_count,min_area,top_n,min_short_side,
-                              required_tags,blacklist,skip_posts_file,skip_posts_type,
+                              skip_posts_file,skip_posts_type,
                        collect_from_listed_posts_file,collect_from_listed_posts_type,apply_filter_to_listed_posts,
                        save_searched_list_type,save_searched_list_path,downloaded_posts_folder,png_folder,jpg_folder,
                        webm_folder,gif_folder,swf_folder,save_filename_type,remove_tags_list,replace_tags_list,
@@ -154,27 +170,27 @@ def config_save_button(batch_folder,resized_img_folder,tag_sep,tag_order_format,
     settings_json["top_n"] = int(top_n)
     settings_json["min_short_side"] = int(min_short_side)
 
-    # CheckBox Group
+    # COLLECT CheckBox Group
     for key in collect_checkboxes:
         if key in collect_checkbox_group_var:
             settings_json[key] = True
         else:
             settings_json[key] = False
-    # CheckBox Group
+    # DOWNLOAD CheckBox Group
     for key in download_checkboxes:
         if key in download_checkbox_group_var:
             settings_json[key] = True
         else:
             settings_json[key] = False
-    # CheckBox Group
+    # RESIZE CheckBox Group
     for key in resize_checkboxes:
         if key in resize_checkbox_group_var:
             settings_json[key] = True
         else:
             settings_json[key] = False
 
-    settings_json["required_tags"] = str(required_tags)
-    settings_json["blacklist"] = str(blacklist)
+    settings_json["required_tags"] = get_string(required_tags_list, str(tag_sep))
+    settings_json["blacklist"] = get_string(blacklist_tags, " | ")
 
     settings_json["skip_posts_file"] = str(skip_posts_file)
     settings_json["skip_posts_type"] = str(skip_posts_type)
@@ -197,7 +213,73 @@ def config_save_button(batch_folder,resized_img_folder,tag_sep,tag_order_format,
     # Update json
     update_JSON(settings_json, config_name)
 
+def text_handler_required(tag_string_comp):
+    temp_tags = None
+    if settings_json["tag_sep"] in tag_string_comp:
+        temp_tags = tag_string_comp.split(settings_json["tag_sep"])
+    elif " | " in tag_string_comp:
+        temp_tags = tag_string_comp.split(" | ")
+    else:
+        temp_tags = [tag_string_comp]
 
+    for tag in temp_tags:
+        if not tag in required_tags_list:
+            required_tags_list.append(tag)
+    return gr.update(lines=1, label='Press Enter to ADD tag/s (E.g. tag1    or    tag1, tag2, ..., etc.)', value=""), \
+           gr.update(choices=required_tags_list, label='ALL Required Tags', value=[])
+
+def text_handler_blacklist(tag_string_comp):
+    temp_tags = None
+    if settings_json["tag_sep"] in tag_string_comp:
+        temp_tags = tag_string_comp.split(settings_json["tag_sep"])
+    elif " | " in tag_string_comp:
+        temp_tags = tag_string_comp.split(" | ")
+    else:
+        temp_tags = [tag_string_comp]
+
+    for tag in temp_tags:
+        if not tag in blacklist_tags:
+            blacklist_tags.append(tag)
+    return gr.update(lines=1, label='Press Enter to ADD tag/s (E.g. tag1    or    tag1, tag2, ..., etc.)', value=""), \
+           gr.update(choices=blacklist_tags, label='ALL Blacklisted Tags', value=[])
+
+def check_box_group_handler_required(check_box_group):
+    for tag in check_box_group:
+        required_tags_list.remove(tag)
+    return gr.update(choices=required_tags_list, label='ALL Required Tags', value=[])
+
+def check_box_group_handler_blacklist(check_box_group):
+    for tag in check_box_group:
+        blacklist_tags.remove(tag)
+    return gr.update(choices=blacklist_tags, label='ALL Blacklisted Tags', value=[])
+
+### file expects a format of 1 tag per line, with the tag being before the first comma
+def parse_file_required(file_list):
+    for single_file in file_list:
+        with open(single_file, 'r') as read_file:
+            while True:
+                line = read_file.readline()
+                if not line:
+                    break
+                tag = line.replace(" ", "").split(",")[0]
+                if not tag in required_tags_list:
+                    required_tags_list.append(tag)
+            read_file.close()
+    return gr.update(choices=required_tags_list, label='ALL Required Tags', value=[])
+
+### file expects a format of 1 tag per line, with the tag being before the first comma
+def parse_file_blacklist(file_list):
+    for single_file in file_list:
+        with open(single_file, 'r') as read_file:
+            while True:
+                line = read_file.readline()
+                if not line:
+                    break
+                tag = line.replace(" ", "").split(",")[0]
+                if not tag in blacklist_tags:
+                    blacklist_tags.append(tag)
+            read_file.close()
+    return gr.update(choices=blacklist_tags, label='ALL Blacklisted Tags', value=[])
 
 def run_script(basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb,postscsv,tagscsv,postsparquet,tagsparquet,aria2cpath):
     run_cmd = f"python e621_batch_downloader.py"
@@ -232,7 +314,12 @@ def run_script(basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb
 ##################################################################################################################################
 '''
 
-with gr.Blocks() as demo:
+### The below CSS is dependent on the version of Gradio the user has, (gradio DEVs should have this fixed in the next version 22.0 of gradio)
+cyan_button_css = "label.svelte-6iujhp.svelte-6iujhp.svelte-6iujhp {background: linear-gradient(#00ffff, #2563eb)}"
+red_button_css = "label.svelte-6iujhp.svelte-6iujhp.svelte-6iujhp.selected {background: linear-gradient(#ff0000, #404040)}"
+green_button_css = "label.svelte-6iujhp.svelte-6iujhp.svelte-6iujhp {background: linear-gradient(#2fa614, #2563eb)}"
+
+with gr.Blocks(css=f"{green_button_css} {red_button_css}") as demo:
     with gr.Tab("General Config"):
         with gr.Row():
             config_save_var0 = gr.Button(value="Apply & Save Settings", variant='primary')
@@ -306,13 +393,27 @@ with gr.Blocks() as demo:
         with gr.Row():
             config_save_var3 = gr.Button(value="Apply & Save Settings", variant='primary')
         with gr.Row():
-            required_tags = gr.Textbox(lines=20, label='ALL Required Tags', value=settings_json["required_tags"])
+            with gr.Column():
+                required_tags = gr.Textbox(lines=1, label='Press Enter to ADD tag/s (E.g. tag1    or    tag1, tag2, ..., etc.)', value="")
+                remove_button_required = gr.Button(value="Remove Checked Tags", variant='secondary')
+            with gr.Column():
+                file_all_tags_list_required = gr.File(file_count="multiple", file_types=["file"], label="Select ALL files with Tags to be parsed and Added")
+                parse_button_required = gr.Button(value="Parse/Add Tags", variant='secondary')
+        with gr.Row():
+            required_tags_group_var = gr.CheckboxGroup(choices=required_tags_list, label='ALL Required Tags', value=[])
 
     with gr.Tab("Blacklist Tags Config"):
         with gr.Row():
             config_save_var4 = gr.Button(value="Apply & Save Settings", variant='primary')
         with gr.Row():
-            blacklist = gr.Textbox(lines=20, label='ALL Blacklisted Tags', value=settings_json["blacklist"])
+            with gr.Column():
+                blacklist = gr.Textbox(lines=1, label='Press Enter to ADD tag/s (E.g. tag1    or    tag1, tag2, ..., etc.)', value="")
+                remove_button_blacklist = gr.Button(value="Remove Checked Tags", variant='secondary')
+            with gr.Column():
+                file_all_tags_list_blacklist = gr.File(file_count="multiple", file_types=["file"], label="Select ALL files with Tags to be parsed and Added")
+                parse_button_blacklist = gr.Button(value="Parse/Add Tags", variant='secondary')
+        with gr.Row():
+            blacklist_group_var = gr.CheckboxGroup(choices=blacklist_tags, label='ALL Blacklisted Tags', value=[])
 
     with gr.Tab("Additional Components Config"):
         with gr.Row():
@@ -368,6 +469,7 @@ with gr.Blocks() as demo:
             aria2cpath = gr.Textbox(lines=1, label='Path to aria2c program', value="")
         with gr.Row():
             run_button = gr.Button(value="Run", variant='primary')
+
     '''
     ##################################################################################################################################
     ####################################################     EVENT HANDLER/S     #####################################################
@@ -377,7 +479,7 @@ with gr.Blocks() as demo:
     config_save_var0.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -389,7 +491,7 @@ with gr.Blocks() as demo:
     config_save_var1.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -401,7 +503,7 @@ with gr.Blocks() as demo:
     config_save_var2.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -413,7 +515,7 @@ with gr.Blocks() as demo:
     config_save_var3.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -425,7 +527,7 @@ with gr.Blocks() as demo:
     config_save_var4.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -437,7 +539,7 @@ with gr.Blocks() as demo:
     config_save_var5.click(fn=config_save_button,
                           inputs=[batch_folder,resized_img_folder,tag_sep,tag_order_format,prepend_tags,append_tags,
                                   img_ext,method_tag_files,min_score,min_fav_count,min_area,top_n,
-                                  min_short_side,required_tags,blacklist,skip_posts_file,
+                                  min_short_side,skip_posts_file,
                                   skip_posts_type,collect_from_listed_posts_file,collect_from_listed_posts_type,
                                   apply_filter_to_listed_posts,save_searched_list_type,save_searched_list_path,
                                   downloaded_posts_folder,png_folder,jpg_folder,webm_folder,gif_folder,swf_folder,
@@ -451,6 +553,15 @@ with gr.Blocks() as demo:
                      inputs=[basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb,postscsv,tagscsv,
                              postsparquet,tagsparquet,aria2cpath],
                      outputs=[])
+
+    required_tags.submit(fn=text_handler_required, inputs=[required_tags], outputs=[required_tags,required_tags_group_var])
+    blacklist.submit(fn=text_handler_blacklist, inputs=[blacklist], outputs=[blacklist,blacklist_group_var])
+
+    remove_button_required.click(fn=check_box_group_handler_required, inputs=[required_tags_group_var], outputs=[required_tags_group_var])
+    remove_button_blacklist.click(fn=check_box_group_handler_blacklist, inputs=[blacklist_group_var], outputs=[blacklist_group_var])
+
+    parse_button_required.click(fn=parse_file_required, inputs=[file_all_tags_list_required], outputs=[required_tags_group_var])
+    parse_button_blacklist.click(fn=parse_file_blacklist, inputs=[file_all_tags_list_blacklist], outputs=[blacklist_group_var])
 
 if __name__ == "__main__":
     # init client & server connection

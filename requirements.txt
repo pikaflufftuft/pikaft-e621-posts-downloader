@@ -3,3 +3,4 @@ polars
 requests
 tqdm
 pyarrow
+gradio == 3.21.0
