@@ -76,6 +76,15 @@ def get_list(arb_string, delimeter):
 def get_string(arb_list, delimeter):
     return delimeter.join(arb_list)
 
+def from_padded(line):
+    if len(line) > 1:# check for padded-0
+        if int(line[0]) == 0:# remove the 0, cast to int, return
+            return int(line[-1])
+    return int(line)
+
+def to_padded(num):
+    return f"{num:02}"
+
 '''
 ##################################################################################################################################
 #############################################     PRIMARY VARIABLE DECLARATIONS     ##############################################
@@ -116,7 +125,7 @@ verbose_print(f"{settings_json}")
 verbose_print(f"json key count: {len(settings_json)}")
 
 # UPDATE json with new key, value pairs
-if not "min_year" in settings_json:
+if not "min_date" in settings_json:
     settings_json["min_year"] = 2000
 elif isinstance(settings_json["min_date"], str) and "-" in settings_json["min_date"]:
     settings_json["min_year"] = int(settings_json["min_date"].split("-")[0])
@@ -126,12 +135,12 @@ else:
 if not "min_month" in settings_json:
     settings_json["min_month"] = 1
 elif isinstance(settings_json["min_date"], str) and "-" in settings_json["min_date"]:
-    settings_json["min_month"] = int(settings_json["min_date"].split("-")[1])
+    settings_json["min_month"] = from_padded(settings_json["min_date"].split("-")[1])
 
 if not "min_day" in settings_json:
     settings_json["min_day"] = 1
 elif isinstance(settings_json["min_date"], str) and settings_json["min_date"].count("-") > 1:
-    settings_json["min_day"] = int(settings_json["min_date"].split("-")[-1])
+    settings_json["min_day"] = from_padded(settings_json["min_date"].split("-")[-1])
 
 update_JSON(settings_json, config_name)
 
@@ -164,7 +173,7 @@ def config_save_button(batch_folder,resized_img_folder,tag_sep,tag_order_format,
     settings_json["min_month"] = int(min_month)
     settings_json["min_day"] = int(min_day)
 
-    settings_json["min_date"] = f"{int(min_year)}-{int(min_month)}-{int(min_day)}"
+    settings_json["min_date"] = f"{int(min_year)}-{to_padded(int(min_month))}-{to_padded(int(min_day))}"
 
     settings_json["min_area"] = int(min_area)
     settings_json["top_n"] = int(top_n)
