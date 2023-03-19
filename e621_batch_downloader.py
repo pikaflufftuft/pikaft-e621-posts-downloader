@@ -257,7 +257,7 @@ def prep_params(prms, batch_count, base_folder):
 
     check_valid_param(prms["min_short_side"], 'min_short_side', None, int)
     for s in prms["min_short_side"]:
-        if -1 < s < 320:
+        if -1 < s < 256:
             raise ValueError(f'min_short_side of {s} is too short')
 
     for i,ext in enumerate(prms["img_ext"]):
@@ -473,7 +473,6 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     if prms["min_fav_count"][batch_num] > 0 and 'fav_count' in df.columns:
         print(f'## Removing posts with favorite count < {prms["min_fav_count"][batch_num]}')
         df = df.filter(pl.col('fav_count') >= prms["min_fav_count"][batch_num])
-        df = df.drop(columns=['fav_count'])
     
     included_file_ext = set(['png'*prms["include_png"][batch_num], 'jpg'*prms["include_jpg"][batch_num], 'gif'*prms["include_gif"][batch_num], 'webm'*prms["include_webm"][batch_num], 'swf'*prms["include_swf"][batch_num]])
     if '' in included_file_ext:
@@ -485,7 +484,6 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     if prms["min_date"][batch_num] >= '2007' and 'created_at' in df.columns:
         print(f'## Removing posts before date {prms["min_date"][batch_num]}')
         df = df.filter(pl.col("created_at") >= prms["min_date"][batch_num])
-        df = df.drop(columns=['created_at'])
     
     if prms["skip_posts_file"][batch_num]:
         print(f'## Skipping listed posts in {prms["skip_posts_file"][batch_num]}')
@@ -496,9 +494,8 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
     if prms["min_area"][batch_num] >= 65536 and 'image_width' in df.columns and 'image_height' in df.columns:
         print(f'## Removing posts with dimension area less than {prms["min_area"][batch_num]}px')
         df = df.filter(pl.col("image_width") * pl.col("image_height") >= prms["min_area"][batch_num])
-        df = df.drop(columns=['image_width','image_height'])
     
-    print("## Getting posts that have all required tags")
+    print("## Getting posts that have required tags")
     all_required_tags = []
     tag_groups = set([s.strip().lower() for s in prms["required_tags"][batch_num].split('|')])
     if '' in tag_groups:
@@ -926,13 +923,13 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     return _img_lists_df
 
 def create_tag_count(prms):
+    cat_to_num = {'general':0,'artist':1,'rating':2,'copyright':3,'character':4,'species':5,'invalid':6,'meta':7,'lore':8}
     for path in set(prms["tag_count_list_folder"]):
         empty = True
         if path:
             all_tag_count = prms["get_all_tag_counter_from_path"][path]
             category_ctr = prms["get_cat_tag_counter_from_path"][path]
             categories = set([item for sublist in prms["tag_order"] for item in sublist])
-            cat_to_num = {'general':0,'artist':1,'rating':2,'copyright':3,'character':4,'species':5,'invalid':6,'meta':7,'lore':8}
             for category in categories:
                 cat_list = list(category_ctr[cat_to_num[category]].items())
                 if cat_list:
