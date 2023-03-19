@@ -1,9 +1,14 @@
+import time
+
 import gradio as gr
 import os
 import json
 import copy
 import multiprocessing as mp
 import subprocess as sub
+import glob
+
+import e621_batch_downloader
 
 '''
 ##################################################################################################################################
@@ -222,7 +227,7 @@ def config_save_button(batch_folder,resized_img_folder,tag_sep,tag_order_format,
     # Update json
     update_JSON(settings_json, config_name)
 
-def text_handler_required(tag_string_comp):
+def textbox_handler_required(tag_string_comp):
     temp_tags = None
     if settings_json["tag_sep"] in tag_string_comp:
         temp_tags = tag_string_comp.split(settings_json["tag_sep"])
@@ -237,7 +242,7 @@ def text_handler_required(tag_string_comp):
     return gr.update(lines=1, label='Press Enter to ADD tag/s (E.g. tag1    or    tag1, tag2, ..., etc.)', value=""), \
            gr.update(choices=required_tags_list, label='ALL Required Tags', value=[])
 
-def text_handler_blacklist(tag_string_comp):
+def textbox_handler_blacklist(tag_string_comp):
     temp_tags = None
     if settings_json["tag_sep"] in tag_string_comp:
         temp_tags = tag_string_comp.split(settings_json["tag_sep"])
@@ -265,57 +270,99 @@ def check_box_group_handler_blacklist(check_box_group):
 ### file expects a format of 1 tag per line, with the tag being before the first comma
 def parse_file_required(file_list):
     for single_file in file_list:
-        with open(single_file, 'r') as read_file:
+        with open(single_file.name, 'r', encoding='utf-8') as read_file:
             while True:
                 line = read_file.readline()
                 if not line:
                     break
-                tag = line.replace(" ", "").split(",")[0]
-                if not tag in required_tags_list:
-                    required_tags_list.append(tag)
+
+                length = len(line.replace(" ", "").split(","))
+
+                if length > 3: # assume everything on one line
+                    tags = line.replace(" ", "").split(",")
+                    for tag in tags:
+                        if not tag in required_tags_list:
+                            required_tags_list.append(tag)
+                else: # assume cascaded tags
+                    tag = line.replace(" ", "").split(",")[0]
+                    if not tag in required_tags_list:
+                        required_tags_list.append(tag)
             read_file.close()
     return gr.update(choices=required_tags_list, label='ALL Required Tags', value=[])
 
 ### file expects a format of 1 tag per line, with the tag being before the first comma
 def parse_file_blacklist(file_list):
     for single_file in file_list:
-        with open(single_file, 'r') as read_file:
+        with open(single_file.name, 'r', encoding='utf-8') as read_file:
             while True:
                 line = read_file.readline()
                 if not line:
                     break
-                tag = line.replace(" ", "").split(",")[0]
-                if not tag in blacklist_tags:
-                    blacklist_tags.append(tag)
+
+                length = len(line.replace(" ", "").split(","))
+
+                if length > 3: # assume everything on one line
+                    tags = line.replace(" ", "").split(",")
+                    for tag in tags:
+                        if not tag in blacklist_tags:
+                            blacklist_tags.append(tag)
+                else: # assume cascaded tags
+                    tag = line.replace(" ", "").split(",")[0]
+                    if not tag in blacklist_tags:
+                        blacklist_tags.append(tag)
             read_file.close()
     return gr.update(choices=blacklist_tags, label='ALL Blacklisted Tags', value=[])
 
-def run_script(basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb,postscsv,tagscsv,postsparquet,tagsparquet,aria2cpath):
-    run_cmd = f"python e621_batch_downloader.py"
-    if len(basefolder) > 0:
-        run_cmd += f" -f {basefolder}"
-    run_cmd += f" -s {settings_path}"
-    run_cmd += f" -c {numcpu}"
-    if phaseperbatch:
-        run_cmd += f" -ppb"
-    if keepdb:
-        run_cmd += f" -k"
-    if cachepostsdb:
-        run_cmd += f" -ch"
-    if len(postscsv) > 0:
-        run_cmd += f" -pcsv {postscsv}"
-    if len(tagscsv) > 0:
-        run_cmd += f" -tcsv {tagscsv}"
-    if len(postsparquet) > 0:
-        run_cmd += f" -ppar {postsparquet}"
-    if len(tagsparquet) > 0:
-        run_cmd += f" -tpar {tagsparquet}"
-    if len(aria2cpath) > 0:
-        run_cmd += f" -ap {aria2cpath}"
+def make_run_visible():
+    return gr.update(interactive=False, visible=True)
 
-    verbose_print(f"RUN COMMAND IS:\t{run_cmd}")
+def run_script(basefolder='',settings_path=None,numcpu=-1,phaseperbatch=False,keepdb=False,cachepostsdb=False,postscsv='',tagscsv='',postsparquet='',tagsparquet='',aria2cpath=''):
+    verbose_print(f"RUN COMMAND IS:\t{basefolder, settings_path, numcpu, phaseperbatch, postscsv, tagscsv, postsparquet, tagsparquet, keepdb, aria2cpath, cachepostsdb}")
 
-    execute(run_cmd)
+    #### ADD A PIPE parameter that passes the connection to the other process
+    global frontend_conn, backend_conn
+    frontend_conn, backend_conn = mp.Pipe()
+    global e6_downloader
+    e6_downloader = mp.Process(target=e621_batch_downloader.E6_Downloader, args=(basefolder, settings_path, numcpu, phaseperbatch, postscsv, tagscsv, postsparquet, tagsparquet, keepdb, aria2cpath, cachepostsdb, backend_conn),)
+    e6_downloader.start()
+
+def data_collect(progress=gr.Progress()):
+    # thread block and wait for response
+    total = int(frontend_conn.recv())
+
+    progress(0, desc="Starting...")
+    for i in progress.tqdm(range(total), desc="Collecting"):
+        _ = frontend_conn.recv()
+    return gr.update(interactive=False, visible=False)
+
+def data_download(progress=gr.Progress()):
+    # thread block and wait for response
+    total = int(frontend_conn.recv())
+
+    progress(0, desc="Starting...")
+    for i in progress.tqdm(range(0,total), desc="Downloading"):
+        _ = int(frontend_conn.recv())
+    return gr.update(interactive=False, visible=False)
+
+def data_resize(progress=gr.Progress()):
+    # thread block and wait for response
+    total = int(frontend_conn.recv())
+
+    progress(0, desc="Starting...")
+    for i in progress.tqdm(range(total), desc="Resizing"):
+        _ = frontend_conn.recv()
+    return gr.update(interactive=False, visible=False)
+
+def end_connection():
+    e6_downloader.join()
+
+def show_gallery(folder_type_select):
+    folder_path = os.path.join(cwd, settings_json["batch_folder"])
+    folder_path = os.path.join(folder_path, settings_json["downloaded_posts_folder"])
+    folder_path = os.path.join(folder_path, settings_json[f"{folder_type_select}_folder"])
+
+    images = glob.glob(os.path.join(folder_path, f"*.{folder_type_select}"))
+    return gr.update(value=images, visible=True)
 
 '''
 ##################################################################################################################################
@@ -478,6 +525,17 @@ with gr.Blocks(css=f"{green_button_css} {red_button_css}") as demo:
             aria2cpath = gr.Textbox(lines=1, label='Path to aria2c program', value="")
         with gr.Row():
             run_button = gr.Button(value="Run", variant='primary')
+        with gr.Row():
+            progress_bar_textbox_collect = gr.Textbox(interactive=False, visible=False)
+        with gr.Row():
+            progress_bar_textbox_download = gr.Textbox(interactive=False, visible=False)
+        with gr.Row():
+            progress_bar_textbox_resize = gr.Textbox(interactive=False, visible=False)
+    with gr.Tab("Image Preview Gallery"):
+        with gr.Row():
+            with gr.Column():
+                download_folder_type = gr.Radio(choices=["png", "jpg", "webm", "gif", "swf"], label='Select Filename Type')
+            gallery_comp = gr.Gallery(visible=False, elem_id="gallery").style(grid=[2], height="auto")
 
     '''
     ##################################################################################################################################
@@ -558,13 +616,14 @@ with gr.Blocks(css=f"{green_button_css} {red_button_css}") as demo:
                           outputs=[]
                           )
 
-    run_button.click(fn=run_script,
-                     inputs=[basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb,postscsv,tagscsv,
-                             postsparquet,tagsparquet,aria2cpath],
-                     outputs=[])
+    run_button.click(fn=run_script,inputs=[basefolder,settings_path,numcpu,phaseperbatch,keepdb,cachepostsdb,postscsv,tagscsv,postsparquet,tagsparquet,aria2cpath],
+                     outputs=[]).then(fn=make_run_visible,inputs=[],outputs=[progress_bar_textbox_collect]).then(fn=data_collect, inputs=[],
+                     outputs=[progress_bar_textbox_collect]).then(fn=make_run_visible,inputs=[],outputs=[progress_bar_textbox_download]).then(fn=data_download, inputs=[],
+                     outputs=[progress_bar_textbox_download]).then(fn=make_run_visible,inputs=[],outputs=[progress_bar_textbox_resize]).then(fn=data_resize, inputs=[],
+                     outputs=[progress_bar_textbox_resize]).then(fn=end_connection,inputs=[],outputs=[])
 
-    required_tags.submit(fn=text_handler_required, inputs=[required_tags], outputs=[required_tags,required_tags_group_var])
-    blacklist.submit(fn=text_handler_blacklist, inputs=[blacklist], outputs=[blacklist,blacklist_group_var])
+    required_tags.submit(fn=textbox_handler_required, inputs=[required_tags], outputs=[required_tags,required_tags_group_var])
+    blacklist.submit(fn=textbox_handler_blacklist, inputs=[blacklist], outputs=[blacklist,blacklist_group_var])
 
     remove_button_required.click(fn=check_box_group_handler_required, inputs=[required_tags_group_var], outputs=[required_tags_group_var])
     remove_button_blacklist.click(fn=check_box_group_handler_blacklist, inputs=[blacklist_group_var], outputs=[blacklist_group_var])
@@ -572,8 +631,10 @@ with gr.Blocks(css=f"{green_button_css} {red_button_css}") as demo:
     parse_button_required.click(fn=parse_file_required, inputs=[file_all_tags_list_required], outputs=[required_tags_group_var])
     parse_button_blacklist.click(fn=parse_file_blacklist, inputs=[file_all_tags_list_blacklist], outputs=[blacklist_group_var])
 
+    download_folder_type.change(fn=show_gallery, inputs=[download_folder_type], outputs=[gallery_comp])
+
 if __name__ == "__main__":
     # init client & server connection
     HOST = "127.0.0.1"
 
-    demo.launch()
+    demo.queue().launch()
