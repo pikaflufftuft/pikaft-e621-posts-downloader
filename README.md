@@ -3,6 +3,8 @@
 ![visitor badge](https://visitor-badge.glitch.me/badge?page_id=pikaflufftuft.pikaft-e621-posts-downloader)
  
  [![](https://img.shields.io/static/v1?message=Open%20in%20Colab&logo=googlecolab&labelColor=5c5c5c&color=0f80c1&label=%20&style=for-the-badge)](coming_soon) (coming soon!)
+ 
+ Check out the webui fork https://github.com/x-CK-x/pikaft-e621-posts-downloader
 
 ##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
