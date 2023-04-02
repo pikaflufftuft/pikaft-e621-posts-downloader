@@ -279,6 +279,10 @@ def prep_params(prms, batch_count, base_folder):
             os.makedirs(prms["resized_img_folder"][i], exist_ok=True)
 
     check_valid_param(prms["method_tag_files"], 'method_tag_files', ('relocate', 'copy'))
+    
+    for i, do_include_tag_file in enumerate(prms["include_tag_file"]):
+        if do_include_tag_file is False:
+            prms["method_tag_files"][i] = 'skip'
 
 def check_tag_query(prms, e621_tags_set):
     tags = ','.join(prms["required_tags"]).replace(' ','')
@@ -640,7 +644,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     
         replace_tags = prms["replace_tags"][batch_num]
     
-        ext_directory = {'png':prms["png_folder"][batch_num], 'jpg':prms["jpg_folder"][batch_num], 'webm':prms["webm_folder"][batch_num], 'gif':prms["gif_folder"][batch_num]}
+        ext_directory = {'png':prms["png_folder"][batch_num], 'jpg':prms["jpg_folder"][batch_num], 'webm':prms["webm_folder"][batch_num], 'gif':prms["gif_folder"][batch_num], 'swf':prms["swf_folder"][batch_num]}
         
         base = pl.repeat('https://static1.e621.net/data/', n=length, eager=True)
         slash = pl.repeat('/', n=length, eager=True)
@@ -1017,13 +1021,13 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     with multiprocessing.Pool(num_cpu) as pool:
         pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(min_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
-
+    
     for i, img_folder, tag_file in zip(range(1,length+1), img_folders, tag_files):
         if (not delete_original) and (resized_img_folder != img_folder):
             if method == 'relocate':
                 print(f'\r## Relocating tag files {i}/{length}',end='')
                 os.replace(img_folder + tag_file, resized_img_folder + tag_file)
-            else: # copy
+            elif method == 'copy':
                 print(f'\r## Copying tag files {i}/{length}',end='')
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
     print('')
@@ -1044,7 +1048,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
             if method == 'relocate':
                 print(f'\r## Relocating tag files {i}/{length}',end='')
                 os.replace(img_fol + tag_file, res_fol + tag_file)
-            else:
+            elif method == 'copy':
                 print(f'\r## Copying tag files {i}/{length}',end='')
                 shutil.copyfile(img_fol + tag_file, res_fol + tag_file)
     print('')
