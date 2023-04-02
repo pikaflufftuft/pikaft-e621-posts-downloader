@@ -290,6 +290,7 @@ offscreen_character
 onomatopoeia
 paldean_form
 paradox_pokemon
+parody
 partially_translated
 plushophilia
 pokemon
