@@ -1,5 +1,5 @@
 opencv_python
-polars
+polars == 0.16.18
 requests
 tqdm
 pyarrow
