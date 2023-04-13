@@ -150,7 +150,7 @@ def prep_params(prms, batch_count, base_folder):
     check_valid_param(prms["downloaded_posts_folder"], 'downloaded_posts_folder', None, str)
     for i in range(batch_count):
         if prms["downloaded_posts_folder"][i] == '':
-            prms["downloaded_posts_folder"][i] = prms["batch_folder"][i]
+            prms["downloaded_posts_folder"][i] = prms["batch_folder"][i] + '/'
         else:
             prms["downloaded_posts_folder"][i] = prms["downloaded_posts_folder"][i].strip('/') + '/'
             if os.path.isabs(prms["downloaded_posts_folder"][i]):                
@@ -239,12 +239,13 @@ def prep_params(prms, batch_count, base_folder):
 
     check_valid_param(prms["tag_count_list_folder"], 'tag_count_list_folder', None, str)
     for i in range(batch_count):
-        prms["tag_count_list_folder"][i] = prms["tag_count_list_folder"][i].strip('/') + '/'
-        if os.path.isabs(prms["tag_count_list_folder"][i]):                
-            os.makedirs(prms["tag_count_list_folder"][i], exist_ok=True)
-        else:
-            prms["tag_count_list_folder"][i] = prms["batch_folder"][i] + '/' + prms["tag_count_list_folder"][i]
-            os.makedirs(prms["tag_count_list_folder"][i], exist_ok=True)
+        if prms["tag_count_list_folder"][i] != '':
+            prms["tag_count_list_folder"][i] = prms["tag_count_list_folder"][i].strip('/') + '/'
+            if os.path.isabs(prms["tag_count_list_folder"][i]):                
+                os.makedirs(prms["tag_count_list_folder"][i], exist_ok=True)
+            else:
+                prms["tag_count_list_folder"][i] = prms["batch_folder"][i] + '/' + prms["tag_count_list_folder"][i]
+                os.makedirs(prms["tag_count_list_folder"][i], exist_ok=True)
     
     get_all_tag_counter_from_path = {}
     get_cat_tag_counter_from_path = {}
@@ -443,7 +444,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
         print(f'## Collecting listed posts in {prms["collect_from_listed_posts_file"][batch_num]}')
         with open(prms["collect_from_listed_posts_file"][batch_num], 'r') as f:
             collect_from_listed_posts = list(set([s.strip() for s in f]))
-        df = df.filter(pl.col(prms["collect_from_listed_posts_type"][batch_num]).is_in(collect_from_listed_posts))
+        df = df.filter(pl.col(prms["collect_from_listed_posts_type"][batch_num]).cast(pl.Utf8).is_in(collect_from_listed_posts))
     
     if prms["collect_from_listed_posts_file"][batch_num] and not prms["apply_filter_to_listed_posts"][batch_num]:
         num_rows = df.shape[0]
@@ -680,7 +681,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             _md5_source = _md5_source.vstack(df.select(['id','md5','source','directory','filename_no_ext','filename']))
         
         if not prms["skip_post_download"][batch_num] and not batch_mode:
-            df.select(['download_links','cmd_directory','cmd_filename']).write_csv(prms["batch_folder"][batch_num] + '/__.txt', sep='\n', has_header=False)
+            df.select(['download_links','cmd_directory','cmd_filename']).write_csv(prms["batch_folder"][batch_num] + '/__.txt', separator='\n', has_header=False)
 
         elif not prms["skip_post_download"][batch_num]:
             __df = __df.vstack(df.select(['download_links','cmd_directory','cmd_filename']))
@@ -697,7 +698,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     elif __df.shape[0] > 0:
         __df = __df.unique(subset=['cmd_directory','cmd_filename'])
         length = __df.shape[0]
-        __df.write_csv(base_folder + '/__.txt', sep='\n', has_header=False)
+        __df.write_csv(base_folder + '/__.txt', separator='\n', has_header=False)
         print(f"##\n## Found {length} unique posts to save\n##")
         print('## Downloading posts')
         failed_set = run_download(base_folder + '/__.txt', length, base_folder + '/download_log.txt', base_folder + '/download_error_log.txt')
@@ -708,7 +709,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     if failed_md5:
         print(f'## Retrying download for {len(failed_md5)} failed post downloads')
         _file = base_folder + '/___.txt'
-        df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['download_links','cmd_directory','cmd_filename']).write_csv(_file, sep='\n', has_header=False)
+        df.filter(pl.col('md5').str.contains('|'.join(failed_md5))).select(['download_links','cmd_directory','cmd_filename']).write_csv(_file, separator='\n', has_header=False)
         failed_set_part_2 = run_download(_file, len(failed_md5), base_folder + '/redownload_log.txt', base_folder + '/redownload_error_log.txt')
         failed_md5 = failed_md5 & failed_set_part_2
 
@@ -930,7 +931,7 @@ def create_tag_count(prms):
     cat_to_num = {'general':0,'artist':1,'rating':2,'copyright':3,'character':4,'species':5,'invalid':6,'meta':7,'lore':8}
     for path in set(prms["tag_count_list_folder"]):
         empty = True
-        if path:
+        if path not in ('', '/'):
             all_tag_count = prms["get_all_tag_counter_from_path"][path]
             category_ctr = prms["get_cat_tag_counter_from_path"][path]
             categories = set([item for sublist in prms["tag_order"] for item in sublist])
