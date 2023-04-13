@@ -494,7 +494,7 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
         print(f'## Skipping listed posts in {prms["skip_posts_file"][batch_num]}')
         with open(prms["skip_posts_file"][batch_num], 'r') as f:
             skip_posts = list(set([s.strip() for s in f]))
-        df = df.filter(~pl.col(prms["skip_posts_type"][batch_num]).is_in(skip_posts))
+        df = df.filter(~pl.col(prms["skip_posts_type"][batch_num]).cast(pl.Utf8).is_in(skip_posts))
     
     if prms["min_area"][batch_num] >= 65536 and 'image_width' in df.columns and 'image_height' in df.columns:
         print(f'## Removing posts with dimension area less than {prms["min_area"][batch_num]}px')
