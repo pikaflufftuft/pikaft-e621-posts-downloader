@@ -336,26 +336,27 @@ def check_tag_query(prms, e621_tags_set):
 
 def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', e621_tags_list_filename='', keep_db=False):
     
-    db_export_file_path = os.path.join(base_folder, 'db_export.html')
-    subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
-    with open(db_export_file_path) as f:
-        contents = f.read()
+    if e621_posts_list_filename == '' or e621_tags_list_filename == '':
+        db_export_file_path = os.path.join(base_folder, 'db_export.html')
+        subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
+        with open(db_export_file_path) as f:
+            contents = f.read()
+        
+            pattern =  r"posts\S*?\.gz"
+            matches = []
+            for line in contents.split("\n"):
+                match = re.search(pattern, line)
+                if match:
+                    matches.append(match.group())
+            posts_filename = matches[-1]
     
-        pattern =  r"posts\S*?\.gz"
-        matches = []
-        for line in contents.split("\n"):
-            match = re.search(pattern, line)
-            if match:
-                matches.append(match.group())
-        posts_filename = matches[-1]
-
-        pattern =  r"tags\S*?\.gz"
-        matches = []
-        for line in contents.split("\n"):
-            match = re.search(pattern, line)
-            if match:
-                matches.append(match.group())
-        tags_filename = matches[-1]
+            pattern =  r"tags\S*?\.gz"
+            matches = []
+            for line in contents.split("\n"):
+                match = re.search(pattern, line)
+                if match:
+                    matches.append(match.group())
+            tags_filename = matches[-1]
 
     if e621_posts_list_filename == '':
         e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
