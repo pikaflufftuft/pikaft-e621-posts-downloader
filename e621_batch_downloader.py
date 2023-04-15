@@ -358,7 +358,9 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
                     matches.append(match.group())
             tags_filename = matches[-1]
 
-    if e621_posts_list_filename == '':
+    if posts_csv != '' and e621_posts_list_filename == '':
+        e621_posts_list_filename = f'{base_folder}/{posts_csv[:-4]}.parquet'
+    elif e621_posts_list_filename == '':
         e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
     if not os.path.isfile(e621_posts_list_filename):
 
@@ -388,7 +390,9 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             os.remove(posts_csv)
         
     
-    if e621_tags_list_filename == '':
+    if tags_csv != '' and e621_tags_list_filename == '':
+        e621_tags_list_filename = f'{base_folder}/{tags_csv[:-4]}.parquet'
+    elif e621_tags_list_filename == '':
         e621_tags_list_filename = f'{base_folder}/{tags_filename[:-7]}.parquet'
     if not os.path.isfile(e621_tags_list_filename):
 
