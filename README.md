@@ -8,6 +8,21 @@
 
 ##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
+# Important:
+Due to the new connection check in https://e621.net/db_export/, automatically downloading the db export throws an error. You need to download the posts and tags .gz files manually. You only need to download one "posts" .csv.gz and one "tags" .csv.gz. I recommend downloading the latest versions.
+
+![e621_db_export_sample](e621_db_export_sample.png)
+
+Extract the csv files. I recommend placing them where the downloader is located. Specify the csv paths using `--postscsv` and `--tagscsv`.
+For example:
+```
+python3 e621_batch_downloader.py -s settings.json --postscsv posts-2023-04-15.csv --tagscsv tags-2023-04-15.csv
+```
+After the downloader created the optimized parquet files, you can use those using `--postsparquet` and `--tagsparquet`.
+```
+python3 e621_batch_downloader.py -s settings.json --postsparquet posts-2023-04-15.parquet --tagsparquet tags-2023-04-15.parquet
+```
+
 ## Features
 
 - Highly customizable settings
