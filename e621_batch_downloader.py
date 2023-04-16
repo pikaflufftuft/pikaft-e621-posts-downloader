@@ -359,7 +359,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             tags_filename = matches[-1]
 
     if posts_csv != '' and e621_posts_list_filename == '':
-        e621_posts_list_filename = f'{base_folder}/{posts_csv[:-4]}.parquet'
+        e621_posts_list_filename = os.path.join(base_folder,f'{posts_csv[:-4]}.parquet')
     elif e621_posts_list_filename == '':
         e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
     if not os.path.isfile(e621_posts_list_filename):
@@ -391,7 +391,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
         
     
     if tags_csv != '' and e621_tags_list_filename == '':
-        e621_tags_list_filename = f'{base_folder}/{tags_csv[:-4]}.parquet'
+        e621_tags_list_filename = os.path.join(base_folder,f'{tags_csv[:-4]}.parquet')
     elif e621_tags_list_filename == '':
         e621_tags_list_filename = f'{base_folder}/{tags_filename[:-7]}.parquet'
     if not os.path.isfile(e621_tags_list_filename):
@@ -400,7 +400,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             tags_csv = f'{base_folder}/{tags_filename[:-3]}'
         if not os.path.isfile(tags_csv):
             tags_link = 'https://e621.net/db_export/' + tags_filename
-            tags_file_path = f'{base_folder}/{tags_filename}'
+            tags_file_path = os.path.join(base_folder, tags_filename)
             print(tags_file_path)
             if not os.path.isfile(tags_file_path):
                 with requests.get(tags_link, stream=True) as r:
@@ -1124,7 +1124,7 @@ def main():
     
     normalize_params(prms, batch_count)
     
-    print('## Checking setting validity')
+    print('## Checking settings validity')
     prep_params(prms, batch_count, base_folder)
     
     print('## Checking required files')
