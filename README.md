@@ -8,21 +8,6 @@
 
 ##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
-# Important:
-Due to the new connection check in https://e621.net/db_export/, automatically downloading the db export throws an error. You need to download the posts and tags .gz files manually. You only need to download one "posts" .csv.gz and one "tags" .csv.gz. I recommend downloading the latest versions.
-
-![e621_db_export_sample](e621_db_export_sample.png)
-
-Extract the csv files. I recommend placing them where the downloader is located. Specify the csv paths using `--postscsv` and `--tagscsv`.
-For example:
-```
-python3 e621_batch_downloader.py -s settings.json --postscsv posts-2023-04-15.csv --tagscsv tags-2023-04-15.csv
-```
-After the downloader created the optimized parquet files, you can use those using `--postsparquet` and `--tagsparquet`.
-```
-python3 e621_batch_downloader.py -s settings.json --postsparquet posts-2023-04-15.parquet --tagsparquet tags-2023-04-15.parquet
-```
-
 ## Features
 
 - Highly customizable settings
@@ -184,6 +169,24 @@ Files/folders that use the same path are merged, not overwritten. For example, u
 * When downloading, if the file already exists, it is skipped, unless, the file exists but was modified, it will download and the modified file will be renamed. Hence, I recommend not setting `delete_original` to `true` if you plan redownloading using the same destination folder.
 * When resizing, when `resized_img_folder` uses a different folder from the source folder, if the file in the destination folder already exists, it is skipped. It does not check if the already existing file has the specified `min_short_side`.
 * When running a new batch using the same save directories for tag files, tag count folders, and save_searched_list, tag files, tag count csvs, and save_searched_lists will be overwritten.
+
+## DB export error workaround:
+If you get an error saying,
+> https://e621.net/db_export/' returned non-zero exit status 22
+
+It could be caused by the e621 website doing a connection check, so automatically downloading the db export throws an error. You need to download the posts and tags .gz files manually. You only need to download one "posts" .csv.gz and one "tags" .csv.gz. I recommend downloading the latest versions.
+
+![e621_db_export_sample](e621_db_export_sample.png)
+
+Extract the csv files. I recommend placing them where the downloader is located. Specify the csv paths using `--postscsv` and `--tagscsv`.
+For example:
+```
+python3 e621_batch_downloader.py -s settings.json --postscsv posts-2023-04-15.csv --tagscsv tags-2023-04-15.csv
+```
+After the downloader created the optimized parquet files, you can use those using `--postsparquet` and `--tagsparquet`.
+```
+python3 e621_batch_downloader.py -s settings.json --postsparquet posts-2023-04-15.parquet --tagsparquet tags-2023-04-15.parquet
+```
 
 ## License
 
