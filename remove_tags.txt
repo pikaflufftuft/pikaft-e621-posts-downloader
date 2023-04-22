@@ -186,6 +186,7 @@
 absurd_res
 almost_caught
 alolan_form
+alpha_pokemon
 alternate_costume
 alternate_version_at_source
 ambiguous_species
@@ -263,6 +264,7 @@ hisuian_form
 huge_filesize
 human_edit
 humor
+impregnation_request
 incest_(lore)
 inner_monologue
 insect_humanoid
@@ -312,7 +314,6 @@ shiny_pokemon
 short_story
 skunk_humanoid
 smaller_version_at_source
-sound_effects
 source_request
 spider_humanoid
 squirrel_humanoid
@@ -321,6 +322,7 @@ story_at_source
 story_in_description
 tag_panic
 tagme
+technical_incest
 text_emphasis
 tiger_humanoid
 translated
