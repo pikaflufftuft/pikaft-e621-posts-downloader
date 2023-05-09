@@ -105,8 +105,8 @@ The downloader automatically downloads the latest e621 posts/tags db when you do
 | apply_filter_to_listed_posts | bool | `true`, `false` | Whether to apply the filters (e.g., `required_tags`, `min_score`) on the list of posts to collect. Setting to `false` will collect all the listed posts that are available.  |  |
 | skip_posts_file | str | *any file path* | Path to a txt file containing a list of id/md5 of posts to skip (one post per line). Set to empty string to disable. | basefolder |
 | skip_posts_type | str | `"id"`, `"md5"` | Whether the content of `skip_posts_file` are id or md5 values |  |
-| do_sort | bool | `true`, `false` | Sort posts by score in descending order. Posts are sorted by id (or date) in ascending order by default.  |  |
-| top_n | int |  | Collect top n posts according to sort. If n > number of filtered posts, save all. Set to `-1` to save all.  |  |
+| sort_by | str | `"score_asc"`, `"score_desc"`, `"fav_count_asc"`, `"fav_count_desc"`, `"date_asc"`, `"date_desc"`, `"id_asc"`, `"id_desc"` | Sort posts by score/fav_count/date/id in ascending/descending order. (sorting by date and id are the same.) |  |
+| top_n | int |  | Collect top n posts according to sort. Example: `"top_n": 10` and `"sort_by": "score_desc"` will collect top 10 highest scoring posts. If n > number of filtered posts, save all. Set to `-1` to save all.  |  |
 | save_searched_list_type | str | `"id"`, `"md5"`, `"None"` | Save a list of searched ids / md5s. Great for keeping track of what you've already searched for. Set to `"None"` to disable. |  |
 | save_searched_list_path | str | *any file path* | File path/filename of list of searched ids / md5s. Default filenames: `list_of_searched_id.txt` / `list_of_searched_md5.txt` | batch_folder |
 | downloaded_posts_folder | str | *any directory path* | Folder path for downloaded posts of any file type | batch_folder |
