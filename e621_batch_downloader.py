@@ -96,7 +96,7 @@ def prep_params(prms, batch_count, base_folder):
         if prms["min_area"][idx] < 0:
             prms["min_area"][idx] = -1
     
-    check_valid_param(prms["do_sort"], 'do_sort', (True,False))
+    check_valid_param(prms["sort_by"], 'sort_by', ('score_asc', 'score_desc', 'fav_count_asc', 'fav_count_desc', 'date_asc', 'date_desc', 'id_asc', 'id_desc'))
     check_valid_param(prms["top_n"], 'top_n', None, int)
     for i, n in enumerate(prms["top_n"]):
         if n < 1:
@@ -552,15 +552,23 @@ def collect_posts(prms, batch_num, e621_posts_list_filename):
             if sub_expr is not None:
                 df = df.filter(~sub_expr)
 
-    
     if prms["top_n"][batch_num] > 0:
-        if prms["do_sort"][batch_num]:
-            print(f'## Getting {prms["top_n"][batch_num]} highest scoring posts')
-            top_n = prms["top_n"][batch_num]
+        top_n = prms["top_n"][batch_num]
+        sort_by = prms["sort_by"][batch_num]
+        print(f'## Getting top {top_n} by {sort_by}')
+        if sort_by == 'score_desc':
             df = df.filter(pl.col('score') >= pl.col('score').top_k(top_n).last()).sort('score', descending=True).head(top_n)
-        else:
-            print(f'## Getting {prms["top_n"][batch_num]} earliest posts')
-            df = df.head(n=prms["top_n"][batch_num])
+        elif sort_by == 'score_asc':
+            # top_k(descending) deprecated in polars commit a4ec5c2
+            df = df.filter(pl.col('score') <= pl.col('score').top_k(top_n, descending=True).last()).sort('score', descending=False).head(top_n)
+        elif sort_by == 'fav_count_desc':
+            df = df.filter(pl.col('fav_count') >= pl.col('fav_count').top_k(top_n).last()).sort('fav_count', descending=True).head(top_n)
+        elif sort_by == 'fav_count_asc':
+            df = df.filter(pl.col('fav_count') <= pl.col('fav_count').top_k(top_n, descending=True).last()).sort('fav_count', descending=False).head(top_n)
+        elif sort_by == 'date_desc' or sort_by == 'id_desc':
+            df = df.filter(pl.col('id') >= pl.col('id').top_k(top_n).last()).sort('id', descending=True).head(top_n)
+        elif sort_by == 'date_asc' or sort_by == 'id_asc':
+            df = df.head(n=top_n)
     
     num_rows = df.shape[0]
     if num_rows == 0:
