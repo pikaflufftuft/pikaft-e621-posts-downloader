@@ -256,10 +256,10 @@ def prep_params(prms, batch_count, base_folder):
     prms["get_all_tag_counter_from_path"] = get_all_tag_counter_from_path
     prms["get_cat_tag_counter_from_path"] = get_cat_tag_counter_from_path
 
-    check_valid_param(prms["min_short_side"], 'min_short_side', None, int)
-    for s in prms["min_short_side"]:
+    check_valid_param(prms["max_short_side"], 'max_short_side', None, int)
+    for s in prms["max_short_side"]:
         if -1 < s < 256:
-            raise ValueError(f'min_short_side of {s} is too short')
+            raise ValueError(f'max_short_side of {s} is too short')
 
     for i,ext in enumerate(prms["img_ext"]):
         if ext not in ('.png', '.jpg', 'png', 'jpg', 'same_as_original'):
@@ -674,7 +674,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
             imgs_length = img_df.shape[0]
             img_df = pl.concat([pl.DataFrame(
                 [pl.repeat(prms["resized_img_folder"][batch_num], n=imgs_length, eager=True).alias('resized_img_folder'),
-                pl.repeat(prms["min_short_side"][batch_num], n=imgs_length, eager=True).alias('min_short_side'),
+                pl.repeat(prms["max_short_side"][batch_num], n=imgs_length, eager=True).alias('max_short_side'),
                 pl.repeat(prms["img_ext"][batch_num], n=imgs_length, eager=True).alias('img_ext'),
                 pl.repeat(prms["delete_original"][batch_num], n=imgs_length, eager=True).alias('delete_original'),
                 pl.repeat(prms["method_tag_files"][batch_num], n=imgs_length, eager=True).alias('method_tag_files')]),
@@ -978,7 +978,7 @@ def increment(counter, counter_lock, length):
         counter.value += 1
         print(f'\r## Resizing Images: {counter.value}/{length} ',end='')
 
-def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, min_short_side, num_images, failed_images, delete_original, resized_img_folder):
+def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, max_short_side, num_images, failed_images, delete_original, resized_img_folder):
     resized_img_folder = imgs_folder if (delete_original or resized_img_folder == '') else resized_img_folder
     if (img_ext == 'same_as_original') or (os.path.splitext(img_file)[1] == img_ext):
         resized_filename = resized_img_folder + img_file
@@ -999,13 +999,13 @@ def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, min_s
 
     img_short_side = min(width, height)
     resized = False
-    if (img_short_side > min_short_side) and (min_short_side > 1):
+    if (img_short_side > max_short_side) and (max_short_side > 1):
         if width == img_short_side:
-            new_width = min_short_side
-            new_height = int(height * min_short_side / width)
+            new_width = max_short_side
+            new_height = int(height * max_short_side / width)
         else:
-            new_width = int(width * min_short_side / height)
-            new_height = min_short_side
+            new_width = int(width * max_short_side / height)
+            new_height = max_short_side
         image = cv2.resize(image, (new_width, new_height), interpolation = cv2.INTER_AREA)
         resized = True
 
@@ -1026,7 +1026,7 @@ def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, min_s
 
 def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):    
     global failed_images, counter, counter_lock
-    min_short_side = prms["min_short_side"][batch_num]
+    max_short_side = prms["max_short_side"][batch_num]
     img_ext = prms["img_ext"][batch_num]
     delete_original = prms["delete_original"][batch_num]
     resized_img_folder = prms["resized_img_folder"][batch_num]
@@ -1037,7 +1037,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(min_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(max_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
     
     for i, img_folder, tag_file in zip(range(1,length+1), img_folders, tag_files):
@@ -1050,7 +1050,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
     print('')
 
-def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_short_side, img_ext, delete_original, tag_files, method_tag_files):
+def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_short_side, img_ext, delete_original, tag_files, method_tag_files):
     global failed_images, counter, counter_lock
     
     init_counter()
@@ -1058,7 +1058,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, min_
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, min_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, max_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
     print('')
 
     for i, img_fol, res_fol, delete, tag_file, method in zip(range(1,length+1), img_folders, resized_img_folders, delete_original, tag_files, method_tag_files):
@@ -1190,7 +1190,7 @@ def main():
                                   image_list_df["directory"].to_list(),
                                   image_list_df["filename"].to_list(),
                                   image_list_df["resized_img_folder"].to_list(),
-                                  image_list_df["min_short_side"].to_list(),
+                                  image_list_df["max_short_side"].to_list(),
                                   image_list_df["img_ext"].to_list(),
                                   image_list_df["delete_original"].to_list(),
                                   image_list_df["tagfilebasename"].to_list(),
