@@ -249,7 +249,7 @@ def prep_params(prms, batch_count, base_folder):
     
     get_all_tag_counter_from_path = {}
     get_cat_tag_counter_from_path = {}
-    for batch_num, path in enumerate(prms["tag_count_list_folder"]):
+    for path in prms["tag_count_list_folder"]:
         if path not in get_all_tag_counter_from_path:
             get_all_tag_counter_from_path[path] = {}
             get_cat_tag_counter_from_path[path] = {i:{} for i in range(9)}
@@ -359,7 +359,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
             tags_filename = matches[-1]
 
     if posts_csv != '' and e621_posts_list_filename == '':
-        e621_posts_list_filename = os.path.join(base_folder,f'{posts_csv[:-4]}.parquet')
+        e621_posts_list_filename = os.path.join(base_folder,f'{os.path.basename(posts_csv)[:-4]}.parquet')
     elif e621_posts_list_filename == '':
         e621_posts_list_filename = f'{base_folder}/{posts_filename[:-7]}.parquet'
     if not os.path.isfile(e621_posts_list_filename):
@@ -391,7 +391,7 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
         
     
     if tags_csv != '' and e621_tags_list_filename == '':
-        e621_tags_list_filename = os.path.join(base_folder,f'{tags_csv[:-4]}.parquet')
+        e621_tags_list_filename = os.path.join(base_folder,f'{os.path.basename(tags_csv)[:-4]}.parquet')
     elif e621_tags_list_filename == '':
         e621_tags_list_filename = f'{base_folder}/{tags_filename[:-7]}.parquet'
     if not os.path.isfile(e621_tags_list_filename):
@@ -647,14 +647,6 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         df = pl.read_parquet(posts_save_path)
         
         length = df.shape[0]
-        
-        if prms["remove_tags_list"][batch_num] != '':
-            with open(prms["remove_tags_list"][batch_num], 'r') as f:
-                remove_tags = set([s.strip() for s in f])
-                if '' in remove_tags:
-                    remove_tags.remove('')
-        else:
-            remove_tags = set()
     
         replace_tags = prms["replace_tags"][batch_num]
     
@@ -849,6 +841,16 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         append_tags = [s for s in append_tags if s != '']
         replace_underscores = prms["replace_underscores"][batch_num]
         remove_parentheses = prms["remove_parentheses"][batch_num]
+
+        if prms["remove_tags_list"][batch_num] != '':
+            with open(prms["remove_tags_list"][batch_num], 'r') as f:
+                remove_tags = set([s.strip() for s in f])
+                if '' in remove_tags:
+                    remove_tags.remove('')
+        else:
+            remove_tags = set()
+
+        added_tags = set(prepend_tags + append_tags)
         
         rating_lst = df['rating'].to_list()
         tag_string_lst = df['tag_string'].to_list()
@@ -877,18 +879,20 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                             if tag in replace_tags:
                                 tag = replace_tags[tag]
                             if category_num in selected_cats:
-                                if reorder_tags:
-                                    if category_num in segregate:
-                                        segregate[category_num].append(tag)
+                                if tag not in added_tags:
+                                    if reorder_tags:
+                                        if category_num in segregate:
+                                            segregate[category_num].append(tag)
+                                        else:
+                                            segregate[category_num] = [tag]
                                     else:
-                                        segregate[category_num] = [tag]
-                                else:
-                                    unsegregated.append(tag)
+                                        unsegregated.append(tag)
                                 if path and not dont_count:
-                                    if tag in all_tag_count:
-                                        all_tag_count[tag] += 1
-                                    else:
-                                        all_tag_count[tag] = 1
+                                    if tag not in added_tags:
+                                        if tag in all_tag_count:
+                                            all_tag_count[tag] += 1
+                                        else:
+                                            all_tag_count[tag] = 1
                                     if tag in category_ctr[category_num]:
                                         category_ctr[category_num][tag] += 1
                                     else:
@@ -902,9 +906,9 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 else:
                     updated_tags = unsegregated
                 if prepend_tags:
-                    updated_tags = [tag for tag in prepend_tags if tag not in updated_tags] + updated_tags
+                    updated_tags = prepend_tags + updated_tags
                 if append_tags:
-                    updated_tags = updated_tags + [tag for tag in append_tags if tag not in updated_tags]
+                    updated_tags = updated_tags + append_tags
                 updated_tags = tag_sep.join(updated_tags)
                 if replace_underscores:
                     updated_tags = updated_tags.replace('_',' ')
