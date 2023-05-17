@@ -46,7 +46,7 @@
 "replace_tags_list": "",
 "tag_count_list_folder": "tag_count",
 "skip_resize": false,
-"min_short_side": 768,
+"max_short_side": 768,
 "img_ext": "png",
 "delete_original": false,
 "resized_img_folder": "resized_img",
