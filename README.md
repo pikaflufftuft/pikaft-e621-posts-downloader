@@ -4,7 +4,7 @@
  
  [![](https://img.shields.io/static/v1?message=Open%20in%20Colab&logo=googlecolab&labelColor=5c5c5c&color=0f80c1&label=%20&style=for-the-badge)](coming_soon) (coming soon!)
  
- Check out the webui fork https://github.com/x-CK-x/pikaft-e621-posts-downloader
+ Check out the webui [https://github.com/x-CK-x/pikaft-e621-posts-downloader](https://github.com/x-CK-x/Dataset-Curation-Tool)
 
 ##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
@@ -56,7 +56,7 @@ For all settings that use `[]`, they should use the same number of items, e.g.,
 ### Executing
 | Flag | Argument | Description | Default |
 | --- | --- | --- | --- |
-| `-f` | `--basefolder` | default output directory used for storing e621 db files and downloading posts | *current working directory* |
+| `-f` | `--basefolder` | default output directory used for storing e621 db files and downloading posts | *script's directory* |
 | `-s` | `--settings` | (required) path to custom download settings json |  |
 | `-c` | `--numcpu` | number of cpu to use for image resizing, set to -1 for max | -1 |
 | `-ppb` | `--phaseperbatch` | performing all phases per batch as opposed to completing all batches per phase, e.g., if passed, complete all phases for the current batch before proceeding to the next batch, else, complete posts collection phase before downloading | *not passed* |
