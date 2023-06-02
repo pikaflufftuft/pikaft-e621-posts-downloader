@@ -693,7 +693,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
         
         df_list_for_tag_files.append(df.drop(['download_links','directory','cmd_directory','file_ext','filename','cmd_filename']))
     
-    if not batch_mode:
+    if not prms["skip_post_download"][batch_num] and not batch_mode:
         print('## Downloading posts')
         failed_set = run_download(prms["batch_folder"][batch_num] + '/__.txt', length, prms["batch_folder"][batch_num] + f'/download_log_{batch_num}.txt', prms["batch_folder"][batch_num] + f'/download_error_log_{batch_num}.txt')
         if failed_set:
