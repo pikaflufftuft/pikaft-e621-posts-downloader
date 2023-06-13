@@ -338,7 +338,12 @@ def get_db(base_folder, posts_csv='', tags_csv='', e621_posts_list_filename='', 
     
     if all((posts_csv == '', e621_posts_list_filename == '')) or all((tags_csv == '', e621_tags_list_filename == '')):
         db_export_file_path = os.path.join(base_folder, 'db_export.html')
-        subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
+        if shutil.which('wget') is not None:
+            subprocess.check_output(f'wget https://e621.net/db_export/ -O {db_export_file_path}', shell=True)
+        elif shutil.which('curl') is not None:
+            subprocess.check_output(f'curl https://e621.net/db_export/ -o {db_export_file_path}', shell=True)
+        else:
+            subprocess.check_output(f'"{aria2c_path}" -d "{base_folder}" -o db_export.html --allow-overwrite=true --auto-file-renaming=false https://e621.net/db_export/', shell=True)
         with open(db_export_file_path) as f:
             contents = f.read()
         
