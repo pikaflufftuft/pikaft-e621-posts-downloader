@@ -132,7 +132,7 @@ def prep_params(prms, batch_count, base_folder):
                 prms["save_searched_list_path"][i] = base + f'/list_of_searched_{t}s.txt'
         else:
             prms["save_searched_list_path"][i] = None
-    
+
     get_searched_list_from_path = {}
     get_searched_list_type_from_path = {}
     for i, path in enumerate(prms["save_searched_list_path"]):
@@ -262,8 +262,8 @@ def prep_params(prms, batch_count, base_folder):
             raise ValueError(f'max_short_side of {s} is too short')
 
     for i,ext in enumerate(prms["img_ext"]):
-        if ext not in ('.png', '.jpg', 'png', 'jpg', 'same_as_original'):
-            raise ValueError(f"Invalid img_ext value: {ext} Use '.png', '.jpg', 'png', 'jpg', 'same_as_original' only")
+        if ext not in ('.png', '.jpg', '.webp', 'png', 'jpg', 'webp', 'same_as_original'):
+            raise ValueError(f"Invalid img_ext value: {ext} Use '.png', '.jpg', '.webp', 'png', 'jpg', 'webp', 'same_as_original' only")
         if ext[0] != '.':
             prms["img_ext"][i] = '.' + prms["img_ext"][i]
 
@@ -285,10 +285,12 @@ def prep_params(prms, batch_count, base_folder):
         if do_include_tag_file is False:
             prms["method_tag_files"][i] = 'skip'
 
-    check_valid_param(prms["jpg_quality"], 'jpg_quality', None, int)
-    for q in prms["jpg_quality"]:
+    check_valid_param(prms["lossy_quality"], 'lossy_quality', None, int)
+    for q in prms["lossy_quality"]:
         if q < 0 or q > 100:
-            raise ValueError(f'jpg_quality "{q}" is invalid. Use an integer between 0 and 100.')
+            raise ValueError(f'lossy_quality "{q}" is invalid. Use an integer between 0 and 100.')
+
+    check_valid_param(prms["webp_lossless"], 'webp_lossless', (True, False))
 
 def check_tag_query(prms, e621_tags_set):
     tags = ','.join(prms["required_tags"]).replace(' ','')
@@ -686,7 +688,8 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 [pl.repeat(prms["resized_img_folder"][batch_num], n=imgs_length, eager=True).alias('resized_img_folder'),
                 pl.repeat(prms["max_short_side"][batch_num], n=imgs_length, eager=True).alias('max_short_side'),
                 pl.repeat(prms["img_ext"][batch_num], n=imgs_length, eager=True).alias('img_ext'),
-                pl.repeat(prms["jpg_quality"][batch_num], n=imgs_length, eager=True).alias('jpg_quality'),
+                pl.repeat(prms["lossy_quality"][batch_num], n=imgs_length, eager=True).alias('lossy_quality'),
+                pl.repeat(prms["webp_lossless"][batch_num], n=imgs_length, eager=True).alias('webp_lossless'),
                 pl.repeat(prms["delete_original"][batch_num], n=imgs_length, eager=True).alias('delete_original'),
                 pl.repeat(prms["method_tag_files"][batch_num], n=imgs_length, eager=True).alias('method_tag_files')]),
                 img_df],how="horizontal")
@@ -989,7 +992,7 @@ def increment(counter, counter_lock, length):
         counter.value += 1
         print(f'\r## Resizing Images: {counter.value}/{length} ',end='')
 
-def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, jpg_quality, max_short_side, num_images, failed_images, delete_original, resized_img_folder):
+def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, lossy_quality, webp_lossless, max_short_side, num_images, failed_images, delete_original, resized_img_folder):
     resized_img_folder = imgs_folder if (delete_original or resized_img_folder == '') else resized_img_folder
     if (img_ext == '.same_as_original') or (os.path.splitext(img_file)[1] == img_ext):
         resized_filename = resized_img_folder + img_file
@@ -997,7 +1000,9 @@ def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, jpg_q
         resized_filename = resized_img_folder + os.path.splitext(img_file)[0] + img_ext
 
     if resized_filename.endswith('.jpg'):
-        imwrite_params = [int(cv2.IMWRITE_JPEG_QUALITY), jpg_quality]
+        imwrite_params = [int(cv2.IMWRITE_JPEG_QUALITY), lossy_quality]
+    elif resized_filename.endswith('.webp') and not webp_lossless:
+        imwrite_params = [int(cv2.IMWRITE_WEBP_QUALITY), lossy_quality]
     else:
         imwrite_params = []
 
@@ -1044,7 +1049,8 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     global failed_images, counter, counter_lock
     max_short_side = prms["max_short_side"][batch_num]
     img_ext = prms["img_ext"][batch_num]
-    jpg_quality = prms["jpg_quality"][batch_num]
+    lossy_quality = prms["lossy_quality"][batch_num]
+    webp_lossless = prms["webp_lossless"][batch_num]
     delete_original = prms["delete_original"][batch_num]
     resized_img_folder = prms["resized_img_folder"][batch_num]
     method = prms["method_tag_files"][batch_num]
@@ -1054,7 +1060,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(jpg_quality), repeat(max_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(lossy_quality), repeat(webp_lossless), repeat(max_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
     
     for i, img_folder, tag_file in zip(range(1,length+1), img_folders, tag_files):
@@ -1067,7 +1073,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
     print('')
 
-def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_short_side, img_ext, jpg_quality, delete_original, tag_files, method_tag_files):
+def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_short_side, img_ext, lossy_quality, webp_lossless, delete_original, tag_files, method_tag_files):
     global failed_images, counter, counter_lock
     
     init_counter()
@@ -1075,7 +1081,7 @@ def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, jpg_quality, max_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, lossy_quality, webp_lossless, max_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
     print('')
 
     for i, img_fol, res_fol, delete, tag_file, method in zip(range(1,length+1), img_folders, resized_img_folders, delete_original, tag_files, method_tag_files):
@@ -1209,7 +1215,8 @@ def main():
                                   image_list_df["resized_img_folder"].to_list(),
                                   image_list_df["max_short_side"].to_list(),
                                   image_list_df["img_ext"].to_list(),
-                                  image_list_df["jpg_quality"].to_list(),
+                                  image_list_df["lossy_quality"].to_list(),
+                                  image_list_df["webp_lossless"].to_list(),
                                   image_list_df["delete_original"].to_list(),
                                   image_list_df["tagfilebasename"].to_list(),
                                   image_list_df["method_tag_files"].to_list())
