@@ -19,7 +19,7 @@ import time
 def check_param_batch_count(prms):
     batch_count = None
     for param_name, parameter in prms.items():
-        if isinstance(parameter,list):   
+        if isinstance(parameter,list):
             if batch_count is None:
                 batch_count = len(parameter)
             else:
@@ -284,6 +284,11 @@ def prep_params(prms, batch_count, base_folder):
     for i, do_include_tag_file in enumerate(prms["include_tag_file"]):
         if do_include_tag_file is False:
             prms["method_tag_files"][i] = 'skip'
+
+    check_valid_param(prms["jpg_quality"], 'jpg_quality', None, int)
+    for q in prms["jpg_quality"]:
+        if q < 0 or q > 100:
+            raise ValueError(f'jpg_quality "{q}" is invalid. Use an integer between 0 and 100.')
 
 def check_tag_query(prms, e621_tags_set):
     tags = ','.join(prms["required_tags"]).replace(' ','')
@@ -681,6 +686,7 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
                 [pl.repeat(prms["resized_img_folder"][batch_num], n=imgs_length, eager=True).alias('resized_img_folder'),
                 pl.repeat(prms["max_short_side"][batch_num], n=imgs_length, eager=True).alias('max_short_side'),
                 pl.repeat(prms["img_ext"][batch_num], n=imgs_length, eager=True).alias('img_ext'),
+                pl.repeat(prms["jpg_quality"][batch_num], n=imgs_length, eager=True).alias('jpg_quality'),
                 pl.repeat(prms["delete_original"][batch_num], n=imgs_length, eager=True).alias('delete_original'),
                 pl.repeat(prms["method_tag_files"][batch_num], n=imgs_length, eager=True).alias('method_tag_files')]),
                 img_df],how="horizontal")
@@ -983,12 +989,17 @@ def increment(counter, counter_lock, length):
         counter.value += 1
         print(f'\r## Resizing Images: {counter.value}/{length} ',end='')
 
-def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, max_short_side, num_images, failed_images, delete_original, resized_img_folder):
+def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, jpg_quality, max_short_side, num_images, failed_images, delete_original, resized_img_folder):
     resized_img_folder = imgs_folder if (delete_original or resized_img_folder == '') else resized_img_folder
-    if (img_ext == 'same_as_original') or (os.path.splitext(img_file)[1] == img_ext):
+    if (img_ext == '.same_as_original') or (os.path.splitext(img_file)[1] == img_ext):
         resized_filename = resized_img_folder + img_file
     else:
         resized_filename = resized_img_folder + os.path.splitext(img_file)[0] + img_ext
+
+    if resized_filename.endswith('.jpg'):
+        imwrite_params = [int(cv2.IMWRITE_JPEG_QUALITY), jpg_quality]
+    else:
+        imwrite_params = []
 
     if resized_img_folder != imgs_folder and os.path.isfile(resized_filename):
         increment(counter, counter_lock, num_images)
@@ -1016,16 +1027,16 @@ def parallel_resize(counter, counter_lock, imgs_folder, img_file, img_ext, max_s
 
     if delete_original:
         if os.path.isfile(resized_filename) and resized: # same ext -> overwrite
-            cv2.imwrite(resized_filename, image)
+            cv2.imwrite(resized_filename, image, imwrite_params)
         elif resized: # different ext -> delete
             os.remove(imgs_folder + img_file)
-            cv2.imwrite(resized_filename, image)
+            cv2.imwrite(resized_filename, image, imwrite_params)
     else:
         if resized_img_folder != imgs_folder: # different folder
-            cv2.imwrite(resized_filename, image)
+            cv2.imwrite(resized_filename, image, imwrite_params)
         else: # same folder -> rename original image
             os.replace(imgs_folder + img_file, imgs_folder + '_' + img_file)
-            cv2.imwrite(resized_filename, image)
+            cv2.imwrite(resized_filename, image, imwrite_params)
     increment(counter, counter_lock, num_images)
 
 
@@ -1033,6 +1044,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     global failed_images, counter, counter_lock
     max_short_side = prms["max_short_side"][batch_num]
     img_ext = prms["img_ext"][batch_num]
+    jpg_quality = prms["jpg_quality"][batch_num]
     delete_original = prms["delete_original"][batch_num]
     resized_img_folder = prms["resized_img_folder"][batch_num]
     method = prms["method_tag_files"][batch_num]
@@ -1042,7 +1054,7 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(max_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, repeat(img_ext), repeat(jpg_quality), repeat(max_short_side), repeat(len(img_files)), repeat(failed_images), repeat(delete_original), repeat(resized_img_folder)))
     print('')
     
     for i, img_folder, tag_file in zip(range(1,length+1), img_folders, tag_files):
@@ -1055,15 +1067,15 @@ def resize_imgs(prms, batch_num, num_cpu, img_folders, img_files, tag_files):
                 shutil.copyfile(img_folder + tag_file, resized_img_folder + tag_file)
     print('')
 
-def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_short_side, img_ext, delete_original, tag_files, method_tag_files):
+def resize_imgs_batch(num_cpu, img_folders, img_files, resized_img_folders, max_short_side, img_ext, jpg_quality, delete_original, tag_files, method_tag_files):
     global failed_images, counter, counter_lock
     
     init_counter()
-        
+
     length = len(img_files)
     multiprocessing.freeze_support()
     with multiprocessing.Pool(num_cpu) as pool:
-        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, max_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
+        pool.starmap(parallel_resize, zip(repeat(counter), repeat(counter_lock), img_folders, img_files, img_ext, jpg_quality, max_short_side, repeat(length), repeat(failed_images), delete_original, resized_img_folders))
     print('')
 
     for i, img_fol, res_fol, delete, tag_file, method in zip(range(1,length+1), img_folders, resized_img_folders, delete_original, tag_files, method_tag_files):
@@ -1197,6 +1209,7 @@ def main():
                                   image_list_df["resized_img_folder"].to_list(),
                                   image_list_df["max_short_side"].to_list(),
                                   image_list_df["img_ext"].to_list(),
+                                  image_list_df["jpg_quality"].to_list(),
                                   image_list_df["delete_original"].to_list(),
                                   image_list_df["tagfilebasename"].to_list(),
                                   image_list_df["method_tag_files"].to_list())
