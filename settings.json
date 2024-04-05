@@ -48,6 +48,8 @@
 "skip_resize": false,
 "max_short_side": 768,
 "img_ext": "png",
+"lossy_quality": 95,
+"webp_lossless": false,
 "delete_original": false,
 "resized_img_folder": "resized_img",
 "method_tag_files": "copy"
