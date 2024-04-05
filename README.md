@@ -1,10 +1,8 @@
 # e621 Posts Downloader
 
 ![visitor badge](https://visitor-badge.glitch.me/badge?page_id=pikaflufftuft.pikaft-e621-posts-downloader)
- 
- [![](https://img.shields.io/static/v1?message=Open%20in%20Colab&logo=googlecolab&labelColor=5c5c5c&color=0f80c1&label=%20&style=for-the-badge)](coming_soon) (coming soon!)
- 
- Check out the webui https://github.com/x-CK-x/Dataset-Curation-Tool
+
+Check out the webui https://github.com/x-CK-x/Dataset-Curation-Tool
 
 ##### If you want to see post previews I recommend using Grabber https://github.com/Bionus/imgbrd-grabber <br /> Or simply search in the e621 website
 
@@ -33,7 +31,7 @@ This downloader uses aria2 for fast downloading.
 ```
 sudo apt-get install aria2
 ```
-For Windows, install the aria2 build https://github.com/aria2/aria2/releases/ Add aria2 in your evironment variable paths
+For Windows, install the aria2 build https://github.com/aria2/aria2/releases/ Add aria2 in your environment variable paths
 
 ## How to use
 
@@ -127,6 +125,8 @@ The downloader automatically downloads the latest e621 posts/tags db when you do
 | skip_resize | bool | `true`, `false` | If `true`, skips resizing of images. |  |
 | max_short_side | int |  | Resize image if shortest side is longer than specified. e.g.,<br />maximum: 768px<br />img res: 1300x1698<br />resized res: 768x1003<br />I recommend using long enough lengths such as 512px (768px better) to minimize rounding error. Minimum positive value: `320`. Set to `-1` to disable resizing (not the same as `skip_resize`) and proceed with the following image processing. Images failed to resize are skipped. |  |
 | img_ext | str | `"png"`, `"jpg"`, `".png"`, `".jpg"`, `"same_as_original"` | Image file extension for saving in image processing. If `max_short_side` is `-1` and `delete_original` is `false`, save a copy of the image in this image file extension. |  |
+| lossy_quality | int |  | For JPG and WEBP. Quality value ranges from 0 to 100 (the higher the closer to the original). Default value for JPG is 95. |  |
+| webp_lossless | bool | `true`, `false` | Set to `true` to save WEBP in lossless format (no compression). |  |
 | delete_original | bool | `true`, `false` | If `false`, save resized image into the resized images folder specified in `resized_img_folder`. Create a copy of the original if it was not resized. |  |
 | resized_img_folder | str | *any directory path* | Folder path to resized images. Set to empty string to use the same images path. If the resized image destination folder is where the original image is saved, the original image filename is prepended with `_` | batch_folder |
 | method_tag_files | str | `"relocate"`, `"copy"` | If `delete_original` is `false` and the resized images folder is not the original images folder, relocate/copy the tag files to the resized images folder. |  |
@@ -150,7 +150,7 @@ base_folder/
 │  │  ├─ tag_category.csv
 │  ├─ save_searched_list_path.txt
 ```
-Any file path parameter that are empty will use the default path.
+Any file path parameter that is empty will use the default path.
 
 Files/folders that use the same path are merged, not overwritten. For example, using the same path for save_searched_list_path at every batch will result in a combined searched list of every batch in one .txt file.
 
@@ -163,10 +163,10 @@ Files/folders that use the same path are merged, not overwritten. For example, u
 * invalid (`spooky_(disambiguation)`, ...)
 * meta (`hi_res`, `digital_media_(artwork)`, ...)
 * lore (`trans_(lore)`, `male_(lore)`, ...)
-* rating (`explicit`, `questionable`, `safe`) (rating tags are techincally not e621 tags)
+* rating (`explicit`, `questionable`, `safe`) (rating tags are technically not e621 tags)
 
 ### Notes
-* When downloading, if the file already exists, it is skipped, unless, the file exists but was modified, it will download and the modified file will be renamed. Hence, I recommend not setting `delete_original` to `true` if you plan redownloading using the same destination folder.
+* When downloading, if the file already exists, it is skipped, unless, the file exists but was modified, it will download and the modified file will be renamed. Hence, I recommend not setting `delete_original` to `true` if you plan to redownload using the same destination folder.
 * When resizing, when `resized_img_folder` uses a different folder from the source folder, if the file in the destination folder already exists, it is skipped. It does not check if the already existing file has the specified `max_short_side`.
 * When running a new batch using the same save directories for tag files, tag count folders, and save_searched_list, tag files, tag count csvs, and save_searched_lists will be overwritten.
 
@@ -183,7 +183,7 @@ For example:
 ```
 python3 e621_batch_downloader.py -s settings.json --postscsv posts-2023-04-15.csv --tagscsv tags-2023-04-15.csv
 ```
-After the downloader created the optimized parquet files, you can use those using `--postsparquet` and `--tagsparquet`.
+After the downloader creates the optimized parquet files, you can use those using `--postsparquet` and `--tagsparquet`.
 ```
 python3 e621_batch_downloader.py -s settings.json --postsparquet posts-2023-04-15.parquet --tagsparquet tags-2023-04-15.parquet
 ```
