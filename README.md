@@ -47,7 +47,7 @@ Example: The following will download posts that have the female tag with a minim
 
 Not using `[]` will make the parameter setting be used for all batches, e.g., `"required_tags": "female",` will be used for each batch.
 
-For all settings that use `[]`, they should use the same number of items, e.g.,
+For all parameters that use `[]`, they should use the same number of items, e.g.,
 
 `"min_score": [100,200],` along with `"min_date": ["2016","2017","2018"],` will throw an error.
 
