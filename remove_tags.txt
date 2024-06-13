@@ -308,6 +308,7 @@ profanity
 questionable_consent
 rabbit_humanoid
 raccoon_humanoid
+redraw
 regional_form_(pokemon)
 reptile_humanoid
 sheep_humanoid
