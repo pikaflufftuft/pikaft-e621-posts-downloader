@@ -655,6 +655,9 @@ def download_posts(prms, batch_nums, posts_save_paths, tag_to_cat, base_folder='
     df_list_for_tag_files = []
     
     for batch_num, posts_save_path in zip(batch_nums, posts_save_paths):
+        
+        if posts_save_path is None:
+            continue
 
         df = pl.read_parquet(posts_save_path)
         
@@ -1200,8 +1203,7 @@ def main():
     else:
         posts_save_paths = [collect_posts(prms, batch_num, e621_posts_list_filename) for batch_num in range(batch_count)]
         create_searched_list(prms)
-        posts_save_paths = [p for p in posts_save_paths if p]
-        if posts_save_paths:
+        if any(posts_save_paths):
             start_time = time.time()
             image_list_df = download_posts(prms, list(range(batch_count)), posts_save_paths, tag_to_cat, base_folder, batch_mode=True)
             elapsed = time.time() - start_time
